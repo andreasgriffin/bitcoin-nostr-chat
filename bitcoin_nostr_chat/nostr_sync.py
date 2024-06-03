@@ -101,6 +101,7 @@ class NostrSync(QObject):
         signals_min: SignalsMin,
         individual_chats_visible=True,
         hide_data_types_in_chat: tuple[DataType] = (DataType.LabelsBip329,),
+        use_compression=True,
     ) -> None:
         super().__init__()
         self.network = network
@@ -108,6 +109,7 @@ class NostrSync(QObject):
         self.group_chat = group_chat
         self.hide_data_types_in_chat = hide_data_types_in_chat
         self.signals_min = signals_min
+        self.use_compression = use_compression
 
         self.gui = ConnectedDevices(
             my_key=self.group_chat.dm_connection.keys.public_key(),
@@ -142,7 +144,7 @@ class NostrSync(QObject):
         logger.info(f"Setting relay_list {relay_list} ")
         self.group_chat.set_relay_list(relay_list)
         self.nostr_protocol.set_relay_list(relay_list)
-        self.publish_my_key_in_protocol()
+        self.publish_my_key_in_protocol(force=True)
         logger.info(f"Done Setting relay_list {relay_list} ")
 
     def is_me(self, public_key: PublicKey) -> bool:
@@ -189,15 +191,17 @@ class NostrSync(QObject):
         device_keys: Keys,
         signals_min: SignalsMin,
         individual_chats_visible=True,
+        use_compression=True,
     ) -> "NostrSync":
-        nostr_protocol = NostrProtocol(network=network, keys=protocol_keys)
-        group_chat = GroupChat(network=network, keys=device_keys)
+        nostr_protocol = NostrProtocol(network=network, keys=protocol_keys, use_compression=use_compression)
+        group_chat = GroupChat(network=network, keys=device_keys, use_compression=use_compression)
         return NostrSync(
             network=network,
             nostr_protocol=nostr_protocol,
             group_chat=group_chat,
             individual_chats_visible=individual_chats_visible,
             signals_min=signals_min,
+            use_compression=use_compression,
         )
 
     def dump(self) -> Dict[str, Any]:
@@ -210,11 +214,17 @@ class NostrSync(QObject):
         return d
 
     @classmethod
-    def from_dump(cls, d: Dict[str, Any], network: bdk.Network, signals_min: SignalsMin) -> "NostrSync":
-        d["nostr_protocol"] = NostrProtocol.from_dump(d["nostr_protocol"], network=network)
-        d["group_chat"] = GroupChat.from_dump(d["group_chat"], network=network)
+    def from_dump(
+        cls, d: Dict[str, Any], network: bdk.Network, signals_min: SignalsMin, use_compression=True
+    ) -> "NostrSync":
+        d["nostr_protocol"] = NostrProtocol.from_dump(
+            d["nostr_protocol"], network=network, use_compression=use_compression
+        )
+        d["group_chat"] = GroupChat.from_dump(
+            d["group_chat"], network=network, use_compression=use_compression
+        )
 
-        sync = NostrSync(**d, network=network, signals_min=signals_min)
+        sync = NostrSync(**d, network=network, signals_min=signals_min, use_compression=use_compression)
 
         # add the gui elements for the trusted members
         for member in sync.group_chat.members:
@@ -242,8 +252,8 @@ class NostrSync(QObject):
     def on_signal_attachement_clicked(self, file_object: FileObject):
         logger.debug(f"clicked: {file_object.__dict__}")
 
-    def publish_my_key_in_protocol(self):
-        self.nostr_protocol.publish_public_key(self.group_chat.dm_connection.keys.public_key())
+    def publish_my_key_in_protocol(self, force=False):
+        self.nostr_protocol.publish_public_key(self.group_chat.dm_connection.keys.public_key(), force=force)
 
     def on_dm(self, dm: BitcoinDM):
         if not dm.event:
@@ -328,7 +338,11 @@ class NostrSync(QObject):
         return None
 
     def on_send_message_in_groupchat(self, text: str):
-        self.group_chat.send(BitcoinDM(label=ChatLabel.GroupChat, description=text, event=None))
+        self.group_chat.send(
+            BitcoinDM(
+                label=ChatLabel.GroupChat, description=text, event=None, use_compression=self.use_compression
+            )
+        )
 
     def filepath_to_dm(self, label: ChatLabel, file_path: str):
         s = file_to_str(file_path)
@@ -336,7 +350,13 @@ class NostrSync(QObject):
         if not bitcoin_data:
             logger.warning(f"Could not recognize {s} as BitcoinData")
             return
-        dm = BitcoinDM(label=label, description=os.path.basename(file_path), event=None, data=bitcoin_data)
+        dm = BitcoinDM(
+            label=label,
+            description=os.path.basename(file_path),
+            event=None,
+            data=bitcoin_data,
+            use_compression=self.use_compression,
+        )
         return dm
 
     def on_share_filepath_in_groupchat(self, file_path: str):
@@ -379,7 +399,12 @@ class NostrSync(QObject):
 
         def callback_on_message_send(text: str):
             event_id = self.group_chat.dm_connection.send(
-                BitcoinDM(event=None, label=ChatLabel.SingleRecipient, description=text),
+                BitcoinDM(
+                    event=None,
+                    label=ChatLabel.SingleRecipient,
+                    description=text,
+                    use_compression=self.use_compression,
+                ),
                 receiver=PublicKey.from_bech32(untrusted_device.pub_key_bech32),
             )
             if event_id:
@@ -390,6 +415,7 @@ class NostrSync(QObject):
                         label=ChatLabel.SingleRecipient,
                         description=text,
                         intended_recipient=untrusted_device.pub_key_bech32,
+                        use_compression=self.use_compression,
                     ),
                     receiver=self.group_chat.dm_connection.keys.public_key(),
                 )

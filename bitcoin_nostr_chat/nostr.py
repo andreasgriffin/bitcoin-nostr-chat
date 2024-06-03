@@ -38,8 +38,6 @@ logger = logging.getLogger(__name__)
 
 import base64
 import enum
-import hashlib
-import sys
 import zlib
 from collections import deque
 from dataclasses import dataclass
@@ -68,15 +66,6 @@ from nostr_sdk import (
     nip04_decrypt,
 )
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
-from PyQt6.QtGui import QCloseEvent
-from PyQt6.QtWidgets import (
-    QApplication,
-    QGroupBox,
-    QPushButton,
-    QTextEdit,
-    QVBoxLayout,
-    QWidget,
-)
 
 
 def fetch_and_parse_json(url: str) -> Optional[Any]:
@@ -496,25 +485,31 @@ class RelayList:
         return cls._postprocess_relays(cls.default_delays())
 
 
-@dataclass
 class BaseDM:
-    event: Optional[Event]
+    def __init__(self, event: Event = None, use_compression=True) -> None:
+        super().__init__()
+        self.event = event
+        self.use_compression = use_compression
 
     def dump(self) -> Dict:
         d = self.__dict__.copy()
+        del d["use_compression"]
         d["event"] = self.event.as_json() if self.event else None
         return d
 
     def serialize(self) -> str:
         d = self.dump()
-        # try to use as little space as possible
-        # first encode the dict into cbor2, then compress,
-        # which helps especially for repetative data
-        # and then use base85 to (hopefully) use the space as best as possible
-        cbor_serialized = cbor2.dumps(d)
-        compressed_data = zlib.compress(cbor_serialized)
-        base64_encoded_data = base64.b85encode(compressed_data).decode()
-        return base64_encoded_data
+        if self.use_compression:
+            # try to use as little space as possible
+            # first encode the dict into cbor2, then compress,
+            # which helps especially for repetative data
+            # and then use base85 to (hopefully) use the space as best as possible
+            cbor_serialized = cbor2.dumps(d)
+            compressed_data = zlib.compress(cbor_serialized)
+            base64_encoded_data = base64.b85encode(compressed_data).decode()
+            return base64_encoded_data
+        else:
+            return json.dumps(d)
 
     @classmethod
     def from_dump(cls, decoded_dict: Dict, network: bdk.Network):
@@ -524,7 +519,19 @@ class BaseDM:
 
     @classmethod
     def from_serialized(cls, base64_encoded_data: str, network: bdk.Network):
+
+        if base64_encoded_data.startswith("{"):
+            # if it is likely a json string, try this method first
+            try:
+                logger.debug(f"from_serialized json {base64_encoded_data}")
+                decoded_dict = json.loads(base64_encoded_data)
+                return cls.from_dump(decoded_dict, network=network)
+            except Exception:
+                logger.error(f"from_serialized: json.loads failed with {base64_encoded_data},  {network}")
+
         try:
+            # try first the compressed decoding
+            logger.debug(f"from_serialized compressed {base64_encoded_data}")
             decoded_data = base64.b85decode(base64_encoded_data)
             decompressed_data = zlib.decompress(decoded_data)
             decoded_dict = cbor2.loads(decompressed_data)
@@ -547,11 +554,18 @@ class BaseDM:
         return False
 
 
-@dataclass
 class ProtocolDM(BaseDM):
-    public_key_bech32: str
-    # this is only when I want the recipient to trust me back
-    please_trust_public_key_bech32: Optional[str] = None
+    def __init__(
+        self,
+        public_key_bech32: str,
+        please_trust_public_key_bech32: str = None,
+        event: Event = None,
+        use_compression=True,
+    ) -> None:
+        super().__init__(event=event, use_compression=use_compression)
+        self.public_key_bech32 = public_key_bech32
+        # this is only when I want the recipient to trust me back
+        self.please_trust_public_key_bech32 = please_trust_public_key_bech32
 
     def __eq__(self, other) -> bool:
         if not super().__eq__(other):
@@ -579,12 +593,21 @@ class ChatLabel(enum.Enum):
         return cls._member_map_.get(name)
 
 
-@dataclass
 class BitcoinDM(BaseDM):
-    label: ChatLabel
-    description: str
-    data: Optional[Data] = None
-    intended_recipient: Optional[str] = None
+    def __init__(
+        self,
+        label: ChatLabel,
+        description: str,
+        data: Data = None,
+        intended_recipient: str = None,
+        event: Event = None,
+        use_compression=True,
+    ) -> None:
+        super().__init__(event=event, use_compression=use_compression)
+        self.label = label
+        self.description = description
+        self.data = data
+        self.intended_recipient = intended_recipient
 
     def dump(self) -> Dict:
         d = super().dump()
@@ -655,7 +678,6 @@ class NotificationHandler(HandleNotification):
 
         base64_encoded_data = nip04_decrypt(self.my_keys.secret_key(), event.author(), event.content())
         # logger.debug(f"Decrypted dm to: {base64_encoded_data}")
-        logger.debug(f"from_serialized  {base64_encoded_data}")
         nostr_dm = self.from_serialized(base64_encoded_data)
         nostr_dm.event = event
 
@@ -937,10 +959,12 @@ class NostrProtocol(BaseProtocol):
         keys: Keys = None,
         dm_connection_dump: Dict = None,
         start_time: datetime = None,
+        use_compression=True,
     ) -> None:
         "Either keys or dm_connection_dump must be given"
         self.network = network
         super().__init__(keys=keys, dm_connection_dump=dm_connection_dump, start_time=start_time)
+        self.use_compression = use_compression
 
     def from_serialized(self, base64_encoded_data) -> ProtocolDM:
         return ProtocolDM.from_serialized(base64_encoded_data=base64_encoded_data, network=self.network)
@@ -953,7 +977,9 @@ class NostrProtocol(BaseProtocol):
         if not force and self.dm_connection.public_key_was_published(author_public_key):
             logger.debug(f"{author_public_key.to_bech32()} was published already. No need to do it again")
             return
-        dm = ProtocolDM(public_key_bech32=author_public_key.to_bech32(), event=None)
+        dm = ProtocolDM(
+            public_key_bech32=author_public_key.to_bech32(), event=None, use_compression=self.use_compression
+        )
         self.dm_connection.send(dm, self.dm_connection.keys.public_key())
         logger.debug(f"done publish_public_key {self.dm_connection.keys.public_key().to_bech32()}")
 
@@ -962,6 +988,7 @@ class NostrProtocol(BaseProtocol):
             public_key_bech32=author_public_key.to_bech32(),
             please_trust_public_key_bech32=recipient_public_key.to_bech32(),
             event=None,
+            use_compression=self.use_compression,
         )
         self.dm_connection.send(dm, self.dm_connection.keys.public_key())
 
@@ -976,10 +1003,10 @@ class NostrProtocol(BaseProtocol):
         }
 
     @classmethod
-    def from_dump(cls, d: Dict, network: bdk.Network) -> "NostrProtocol":
+    def from_dump(cls, d: Dict, network: bdk.Network, use_compression=True) -> "NostrProtocol":
         d["start_time"] = datetime.fromtimestamp(d["start_time"])
 
-        return NostrProtocol(**d, network=network)
+        return NostrProtocol(**d, network=network, use_compression=use_compression)
 
 
 class GroupChat(BaseProtocol):
@@ -996,11 +1023,17 @@ class GroupChat(BaseProtocol):
         dm_connection_dump: dict = None,
         start_time: datetime = None,
         members: List[PublicKey] = None,
+        use_compression=True,
     ) -> None:
         "Either keys or dm_connection_dump must be given"
         self.members: List[PublicKey] = members if members else []
         self.network = network
-        super().__init__(keys=keys, dm_connection_dump=dm_connection_dump, start_time=start_time)
+        self.use_compression = use_compression
+        super().__init__(
+            keys=keys,
+            dm_connection_dump=dm_connection_dump,
+            start_time=start_time,
+        )
 
     def from_serialized(self, base64_encoded_data: str) -> BitcoinDM:
         return BitcoinDM.from_serialized(base64_encoded_data, network=self.network)
@@ -1044,139 +1077,25 @@ class GroupChat(BaseProtocol):
         }
 
     @classmethod
-    def from_dump(cls, d: Dict, network: bdk.Network) -> "NostrProtocol":
+    def from_dump(cls, d: Dict, network: bdk.Network, use_compression=True) -> "NostrProtocol":
         d["start_time"] = datetime.fromtimestamp(d["start_time"])
 
         d["members"] = [PublicKey.from_bech32(pk) for pk in d["members"]]
-        return GroupChat(**d, network=network)
+        return GroupChat(**d, network=network, use_compression=use_compression)
 
     def renew_own_key(self):
         # send new key to memebers
         for member in self.members:
             self.dm_connection.send(
-                BitcoinDM(event=None, label=ChatLabel.DeleteMeRequest, description=""), member
+                BitcoinDM(
+                    event=None,
+                    label=ChatLabel.DeleteMeRequest,
+                    description="",
+                    use_compression=self.use_compression,
+                ),
+                member,
             )
             # self.dm_connection.send(ProtocolDM(event=None, public_key_bech32=keys.public_key().to_bech32(),please_trust_public_key_bech32=True), member)
             # logger.debug(f"Send my new public key {keys.public_key().to_bech32()} to {member.to_bech32()}")
 
         self.refresh_dm_connection(Keys.generate())
-
-
-if __name__ == "__main__":
-
-    class SimpleChatApp(QWidget):
-        def __init__(self):
-            super().__init__()
-
-            # Layout
-            layout = QVBoxLayout()
-
-            groupbox = QGroupBox("Protocol")
-            groupbox.setLayout(QVBoxLayout())
-
-            # TextEdit for received messages
-            self.protocol_messages = QTextEdit()
-            self.protocol_messages.setReadOnly(True)
-            groupbox.layout().addWidget(self.protocol_messages)
-            layout.addWidget(groupbox)
-
-            # button = QPushButton("Send my device key")
-            # button.clicked.connect(self.publish_my_key)
-            # groupbox.layout().addWidget(button)
-
-            groupbox_members = QGroupBox("Members")
-            groupbox_members.setLayout(QVBoxLayout())
-
-            # TextEdit for received messages
-            self.member_messages = QTextEdit()
-            self.member_messages.setReadOnly(True)
-            groupbox_members.layout().addWidget(self.member_messages)
-            layout.addWidget(groupbox_members)
-
-            # TextEdit for writing a message
-            self.message_to_send = QTextEdit()
-            groupbox_members.layout().addWidget(self.message_to_send)
-
-            button = QPushButton("Send bitcoin message")
-            button.clicked.connect(self.send_message_to_members)
-            groupbox_members.layout().addWidget(button)
-
-            # button = QPushButton("List other devices")
-            # button.clicked.connect(self.list_other_devices)
-            # layout.addWidget(button)
-
-            # Set the layout
-            self.setLayout(layout)
-
-            protocol_secret_str = "1111111111111111111111122222222222222222222222"
-            protocol_keys = Keys(
-                sk=SecretKey.from_hex(hashlib.sha256(protocol_secret_str.encode("utf-8")).hexdigest())
-            )
-            logger.debug(f"protocol_key = {protocol_keys.secret_key().to_bech32()}")
-
-            self.nostr_protocol: NostrProtocol = NostrProtocol(
-                network=bdk.Network.REGTEST, keys=protocol_keys
-            )
-            self.groupchat: GroupChat = GroupChat(network=bdk.Network.REGTEST, keys=Keys.generate())
-            self.protocol_messages.append(
-                f"my publiy key {self.groupchat.dm_connection.keys.public_key().to_bech32()}"
-            )
-
-            self.nostr_protocol.signal_dm.connect(self.on_message_protocol)
-            self.nostr_protocol.subscribe()
-            self.groupchat.signal_dm.connect(self.on_message_device)
-            self.groupchat.subscribe()
-
-            self.publish_my_key_in_protocol()
-
-        def publish_my_key_in_protocol(self):
-            self.nostr_protocol.publish_public_key(self.groupchat.dm_connection.keys.public_key())
-
-        def on_message_device(self, nostr_dm: BitcoinDM):
-            text = f"Received {nostr_dm}"
-            self.member_messages.append(text)
-
-        def on_message_protocol(self, nostr_dm: ProtocolDM):
-            text = f"Received {nostr_dm}"
-            logger.debug(text)
-            self.protocol_messages.append(text)
-            nostr_public_key = PublicKey.from_bech32(nostr_dm.public_key_bech32)
-
-            if nostr_public_key.to_bech32() != self.groupchat.dm_connection.keys.public_key().to_bech32():
-                # automatically trust
-                self.groupchat.add_member(PublicKey.from_bech32(nostr_dm.public_key_bech32))
-
-        def send_message_to_members(self):
-            # Get the message text
-            message = self.message_to_send.toPlainText()
-
-            data = None
-            try:
-                data = Data.from_str(message, bdk.Network.REGTEST)
-            except:
-                logger.debug(f"{message} could not be recognized as bitcoin data")
-            self.groupchat.send(
-                BitcoinDM(label=ChatLabel.GroupChat, description=message, data=data, event=None)
-            )
-
-            # Clear the message input
-            self.message_to_send.clear()
-
-        def closeEvent(self, event: QCloseEvent) -> None:
-            d = {}
-            d["nostr_protocol"] = self.nostr_protocol.dump()
-            d["groupchat"] = self.groupchat.dump()
-
-            with open("dump.json", "w") as file:
-                file.write(json.dumps(d))
-
-            super().closeEvent(event)
-
-    logging.basicConfig(level=logging.DEBUG)
-
-    app = QApplication(sys.argv)
-
-    chat_app = SimpleChatApp()
-    chat_app.show()
-
-    sys.exit(app.exec())

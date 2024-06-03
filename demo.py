@@ -61,13 +61,21 @@ def load_dict_from_file(file_path: str):
 
 
 class DemoApp(QMainWindow):
-    def __init__(self, file_name, signals_min: SignalsMin, protcol_secret_str: str = str(uuid4())):
+    def __init__(
+        self,
+        file_name,
+        signals_min: SignalsMin,
+        protcol_secret_str: str = str(uuid4()),
+        use_compression=True,
+    ):
         super().__init__()
         self.file_name = file_name
 
         d = load_dict_from_file(file_name)
         if d:
-            self.nostr_sync = NostrSync.from_dump(d, network=bdk.Network.REGTEST, signals_min=signals_min)
+            self.nostr_sync = NostrSync.from_dump(
+                d, network=bdk.Network.REGTEST, signals_min=signals_min, use_compression=use_compression
+            )
         else:
 
             keys = Keys(
@@ -79,6 +87,7 @@ class DemoApp(QMainWindow):
                 protocol_keys=keys,
                 device_keys=Keys.generate(),
                 signals_min=signals_min,
+                use_compression=use_compression,
             )
         self.nostr_sync.subscribe()
         self.setCentralWidget(self.nostr_sync.gui)
@@ -100,6 +109,11 @@ def parse_args():
         help="A secret for discovering other clients. This is required if there is no previous stored file.",
     )
     parser.add_argument(
+        "--disable_compression",
+        action="store_true",
+        help="Disables the compression that is usually used to reduce load on relays",
+    )
+    parser.add_argument(
         "--profile", action="store_true", help="Enable profiling. Visualize with snakeviz .prof_stats"
     )
 
@@ -109,7 +123,10 @@ def parse_args():
 def main(args):
     app = QApplication(sys.argv)
     demoApp = DemoApp(
-        file_name=args.file_name, signals_min=SignalsMin(), protcol_secret_str=args.protcol_secret_str
+        file_name=args.file_name,
+        signals_min=SignalsMin(),
+        protcol_secret_str=args.protcol_secret_str,
+        use_compression=not args.disable_compression,
     )
     demoApp.show()
     app.exec()
