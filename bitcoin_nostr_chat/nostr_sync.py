@@ -38,7 +38,7 @@ import os
 from typing import Any, Dict, Optional
 
 import bdkpython as bdk
-from bitcoin_qrreader.bitcoin_qr import Data, DataType
+from bitcoin_qr_tools.data import Data, DataType
 from nostr_sdk import PublicKey
 from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox

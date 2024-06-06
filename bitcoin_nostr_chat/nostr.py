@@ -46,7 +46,7 @@ from typing import Any, Callable, Dict, List, Optional, Set
 import bdkpython as bdk
 import cbor2
 import requests
-from bitcoin_qrreader.bitcoin_qr import Data, DataType
+from bitcoin_qr_tools.data import Data, DataType
 from nostr_sdk import (
     Client,
     Event,

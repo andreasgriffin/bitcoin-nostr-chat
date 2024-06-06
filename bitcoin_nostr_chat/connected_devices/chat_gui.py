@@ -36,7 +36,7 @@ from ..signals_min import SignalsMin
 logger = logging.getLogger(__name__)
 import os
 
-from bitcoin_qrreader.bitcoin_qr import Data
+from bitcoin_qr_tools.data import Data
 from PyQt6.QtCore import QModelIndex, QSize, Qt, pyqtSignal
 from PyQt6.QtGui import (
     QAction,
