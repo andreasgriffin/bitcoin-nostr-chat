@@ -26,6 +26,6 @@ repos:
     hooks:
       - id: mypy
         # Additional arguments to MyPy can be added here
-        args: [ --check-untyped-defs]
+        args: [ --check-untyped-defs, --warn-unreachable]
         additional_dependencies: [types-requests, types-PyYAML]      
 

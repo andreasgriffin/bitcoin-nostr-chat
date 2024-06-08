@@ -13,6 +13,6 @@ def icon_path(icon_basename: str):
 
 
 def read_QIcon(icon_basename: str) -> QIcon:
-    if icon_basename is None:
+    if not icon_basename:
         return QIcon()
     return QIcon(icon_path(icon_basename))
