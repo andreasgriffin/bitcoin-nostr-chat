@@ -5,7 +5,7 @@ All users know a shared secret (like a bitcoin wallet descriptor). This allows t
 
 The actual single and group chats are based on a newly generated secret keys for each participant.
   * Each participant has to be manually accepted to be added to the group chat
-  * Chats with participants use NIP04 and group messages are simply NIP04 messages to each participant 
+  * Chats with participants use NIP17 and group messages are simply NIP17 messages to each participant 
 
 
 

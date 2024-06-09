@@ -1,23 +1,20 @@
 import logging
-from typing import Dict
-from uuid import uuid4
-
-from bitcoin_nostr_chat.signals_min import SignalsMin
 
 logging.basicConfig(level=logging.DEBUG)
-
-
 import argparse
 import hashlib
 import json
+from typing import Dict
+from uuid import uuid4
 
 import bdkpython as bdk
 from nostr_sdk import Keys, SecretKey
 from PyQt6.QtGui import QCloseEvent
 
 from bitcoin_nostr_chat.nostr_sync import NostrSync
+from bitcoin_nostr_chat.signals_min import SignalsMin
 
-logger = logging.getLogger()  # Getting the root logger
+logger = logging.getLogger(__name__)  # Getting the root logger
 
 import sys
 

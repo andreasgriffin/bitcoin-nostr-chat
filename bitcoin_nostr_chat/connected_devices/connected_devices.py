@@ -352,7 +352,7 @@ class ConnectedDevices(QtWidgets.QWidget):
         my_key: PublicKey,
         signals_min: SignalsMin,
         individual_chats_visible=True,
-        get_relay_list: Callable[[], RelayList] = None,
+        get_relay_list: Callable[[], Optional[RelayList]] = None,
     ) -> None:
         super().__init__()
         self.signals_min = signals_min

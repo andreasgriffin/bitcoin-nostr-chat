@@ -27,14 +27,30 @@
 # SOFTWARE.
 
 
+import asyncio
 import json
 import logging
 from abc import abstractmethod
 from datetime import datetime, timedelta
-from time import sleep
+
+from nostr_sdk import (
+    Client,
+    Event,
+    Filter,
+    HandleNotification,
+    Keys,
+    Kind,
+    KindEnum,
+    NostrSigner,
+    Timestamp,
+    UnsignedEvent,
+    UnwrappedGift,
+    nip04_decrypt,
+)
+
+from bitcoin_nostr_chat.default_relays import default_delays
 
 logger = logging.getLogger(__name__)
-
 
 import base64
 import enum
@@ -65,7 +81,9 @@ from nostr_sdk import (
     Timestamp,
     nip04_decrypt,
 )
-from PyQt6.QtCore import QObject, QTimer, pyqtSignal
+from PyQt6.QtCore import QObject, QThread, QTimer, pyqtSignal
+
+DM_KIND = KindEnum.PRIVATE_DIRECT_MESSAGE()
 
 
 def fetch_and_parse_json(url: str) -> Optional[Any]:
@@ -88,8 +106,8 @@ def fetch_and_parse_json(url: str) -> Optional[Any]:
         return None
 
 
-def get_recipient_public_key(event: Event) -> Optional[PublicKey]:
-    if not event.kind().match_enum(KindEnum.ENCRYPTED_DIRECT_MESSAGE()):
+def get_recipient_public_key_of_nip04(event: Event) -> Optional[PublicKey]:
+    if event.kind().as_enum() != DM_KIND:
         return None
     for tag in event.tags():
         tag_enum = tag.as_enum()
@@ -154,323 +172,6 @@ class RelayList:
         ]
 
     @classmethod
-    def default_delays(cls) -> List[str]:
-        return [
-            "wss://relay.damus.io",
-            "wss://nostr.mom",
-            "wss://nostr.slothy.win",
-            "wss://nos.lol",
-            "wss://nostr.massmux.com",
-            "wss://nostr-relay.schnitzel.world",
-            "wss://knostr.neutrine.com",
-            "wss://nostr.vulpem.com",
-            "wss://relay.nostr.com.au",
-            "wss://e.nos.lol",
-            "wss://relay.orangepill.dev",
-            "wss://nostr.data.haus",
-            "wss://nostr.koning-degraaf.nl",
-            "wss://nostr-relay.texashedge.xyz",
-            "wss://nostr.wine",
-            "wss://nostr-1.nbo.angani.co",
-            "wss://nostr.easydns.ca",
-            "wss://nostr.cheeserobot.org",
-            "wss://nostr.inosta.cc",
-            "wss://relay.nostrview.com",
-            "wss://relay.nostromo.social",
-            "wss://arc1.arcadelabs.co",
-            "wss://nostr.zkid.social",
-            "wss://bitcoinmaximalists.online",
-            "wss://private.red.gb.net",
-            "wss://nostr21.com",
-            "wss://offchain.pub",
-            "wss://relay.nostrcheck.me",
-            "wss://relay.nostr.vet",
-            "wss://relay.hamnet.io",
-            "wss://jp-relay-nostr.invr.chat",
-            "wss://relay.nostr.wirednet.jp",
-            "wss://nostrelay.yeghro.site",
-            "wss://nostr.topeth.info",
-            "wss://relay.nostrati.com",
-            "wss://nostr.danvergara.com",
-            "wss://nostr.roundrockbitcoiners.com",
-            "wss://nostr.shawnyeager.net",
-            "wss://relay.orange-crush.com",
-            "wss://nostr.bitcoiner.social",
-            "wss://relay.snort.social",
-            "wss://nostr.bch.ninja",
-            "wss://relay.nostriches.org",
-            "wss://atlas.nostr.land",
-            "wss://brb.io",
-            "wss://relay.roli.social",
-            "wss://global-relay.cesc.trade",
-            "wss://relay.reeve.cn",
-            "wss://relay.nostrid.com",
-            "wss://nostr.noones.com",
-            "wss://relay.nostr.nu",
-            "wss://eden.nostr.land",
-            "wss://nostr.sebastix.dev",
-            "wss://nostr.fmt.wiz.biz",
-            "wss://nostr.ownbtc.online",
-            "wss://nostr.bitcoinplebs.de",
-            "wss://tmp-relay.cesc.trade",
-            "wss://bitcoiner.social",
-            "wss://nostr.easify.de",
-            "wss://xmr.usenostr.org",
-            "wss://nostr-relay.nokotaro.com",
-            "wss://nostr.naut.social",
-            "wss://nostrsatva.net",
-            "wss://at.nostrworks.com",
-            "wss://nostr01.vida.dev",
-            "wss://nostr.sovbit.host",
-            "wss://nostr.plebchain.org",
-            "wss://relay.nostr.bg",
-            "wss://nostr.primz.org",
-            "wss://relay.nostrified.org",
-            "wss://nostr.decentony.com",
-            "wss://relay.primal.net",
-            "wss://nostr.orangepill.dev",
-            "wss://puravida.nostr.land",
-            "wss://nostr.1sat.org",
-            "wss://nostr.oxtr.dev",
-            "wss://nostr-relay.derekross.me",
-            "wss://relay.s3x.social",
-            "wss://nostrrelay.com",
-            "wss://nostr-pub.semisol.dev",
-            "wss://nostr.semisol.dev",
-            "wss://relay.nostr.wf",
-            "wss://nostr.land",
-            "wss://relay.mostr.pub",
-            "wss://relay.nostrplebs.com",
-            "wss://purplepag.es",
-            "wss://paid.nostrified.org",
-            "wss://relayable.org",
-            "wss://btc-italia.online",
-            "wss://yestr.me",
-            "wss://relay.nostr.sc",
-            "wss://nostr.portemonero.com",
-            "wss://adult.18plus.social",
-            "wss://nostr.zbd.gg",
-            "wss://ca.orangepill.dev",
-            "wss://nostr-02.dorafactory.org",
-            "wss://relay.chicagoplebs.com",
-            "wss://relay.hodl.ar",
-            "wss://therelayofallrelays.nostr1.com",
-            "wss://nostr.carlostkd.ch",
-            "wss://rly.nostrkid.com",
-            "wss://welcome.nostr.wine",
-            "wss://nostr.maximacitadel.org",
-            "wss://nostr-relay.app",
-            "wss://ithurtswhenip.ee",
-            "wss://stealth.wine",
-            "wss://nostr.thesamecat.io",
-            "wss://nostr.zenon.info",
-            "wss://yabu.me",
-            "wss://relay.deezy.io",
-            "wss://nrelay.c-stellar.net",
-            "wss://africa.nostr.joburg",
-            "wss://nostrja-kari.heguro.com",
-            "wss://paid.nostr.lc",
-            "wss://nostr.ingwie.me",
-            "wss://relay2.nostrchat.io",
-            "wss://ln.weedstr.net/nostrrelay/weedstr",
-            "wss://relay1.nostrchat.io",
-            "wss://nostr2.sanhauf.com",
-            "wss://nostr.otc.sh",
-            "wss://freerelay.xyz",
-            "wss://nostrua.com",
-            "wss://relay.devstr.org",
-            "wss://nostr.dakukitsune.ca",
-            "wss://relay2.nostr.vet",
-            "wss://nostr.debancariser.com",
-            "wss://nostrpub.yeghro.site",
-            "wss://nostr.schorsch.fans",
-            "wss://ca.relayable.org",
-            "wss://nostr.hexhex.online",
-            "wss://nostr.reelnetwork.eu",
-            "wss://relay.nostr.directory",
-            "wss://booger.pro",
-            "wss://relay.stpaulinternet.net",
-            "wss://nostr.donky.social",
-            "wss://nostr.438b.net",
-            "wss://nostr.impervious.live",
-            "wss://nostr.bolt.fun",
-            "wss://nostr.btc-library.com",
-            "wss://sats.lnaddy.com/nostrclient/api/v1/relay",
-            "wss://relay.mutinywallet.com",
-            "wss://nostr.sagaciousd.com",
-            "wss://nostrools.nostr1.com",
-            "wss://nostrja-world-relays-test.heguro.com",
-            "wss://ryan.nostr1.com",
-            "wss://satdow.relaying.io",
-            "wss://relay.bitcoinpark.com",
-            "wss://la.relayable.org",
-            "wss://nostr-01.yakihonne.com",
-            "wss://nostr.fort-btc.club",
-            "wss://test.relay.report",
-            "wss://relay.nostrcn.com",
-            "wss://nostr.sathoarder.com",
-            "wss://christpill.nostr1.com",
-            "wss://relap.orzv.workers.dev",
-            "wss://nostr.sixteensixtyone.com",
-            "wss://relay.danvergara.com",
-            "wss://nostr.heliodex.cf",
-            "wss://wbc.nostr1.com",
-            "wss://filter.stealth.wine?broadcast=true",
-            "wss://lnbits.michaelantonfischer.com/nostrrelay/michaelantonf",
-            "wss://pater.nostr1.com",
-            "wss://lnbits.eldamar.icu/nostrrelay/relay",
-            "wss://butcher.nostr1.com",
-            "wss://tictac.nostr1.com",
-            "wss://relay.relayable.org",
-            "wss://relay.hrf.org",
-            "wss://fiatdenier.nostr1.com",
-            "wss://relay.ingwie.me",
-            "wss://nostr.codingarena.de",
-            "wss://fistfistrelay.nostr1.com",
-            "wss://au.relayable.org",
-            "wss://relay.kamp.site",
-            "wss://nostr.stakey.net",
-            "wss://a.nos.lol",
-            "wss://eu.purplerelay.com",
-            "wss://relay.nostrassets.com",
-            "wss://hodlbod.nostr1.com",
-            "wss://nostr-relay.psfoundation.info",
-            "wss://nostr.fractalized.net",
-            "wss://21ideas.nostr1.com",
-            "wss://hotrightnow.nostr1.com",
-            "wss://verbiricha.nostr1.com",
-            "wss://rly.bopln.com",
-            "wss://teemie1-relay.duckdns.org",
-            "wss://relay.ohbe.me",
-            "wss://relay.nquiz.io",
-            "wss://zh.nostr1.com",
-            "wss://bevo.nostr1.com",
-            "wss://gardn.nostr1.com",
-            "wss://feedstr.nostr1.com",
-            "wss://supertestnet.nostr1.com",
-            "wss://relay-jp.shino3.net",
-            "wss://sakhalin.nostr1.com",
-            "wss://adre.su",
-            "wss://nostr.kungfu-g.rip",
-            "wss://pay21.nostr1.com",
-            "wss://testrelay.nostr1.com",
-            "wss://nostr-dev.zbd.gg",
-            "wss://za.purplerelay.com",
-            "wss://in.purplerelay.com",
-            "wss://nostr.openordex.org",
-            "wss://relay.cxcore.net",
-            "wss://vitor.relaying.io",
-            "wss://agora.nostr1.com",
-            "wss://nostr.hashi.sbs",
-            "wss://nostr.lbdev.fun",
-            "wss://relay.crimsonleaf363.com",
-            "wss://pablof7z.nostr1.com",
-            "wss://zyro.nostr1.com",
-            "wss://relay.satoshidnc.com",
-            "wss://strfry.nostr.lighting",
-            "wss://frens.nostr1.com",
-            "wss://vitor.nostr1.com",
-            "wss://chefstr.nostr1.com",
-            "wss://relay.siamstr.com",
-            "wss://ae.purplerelay.com",
-            "wss://umami.nostr1.com",
-            "wss://prism.nostr1.com",
-            "wss://sfr0.nostr1.com",
-            "wss://n.ok0.org",
-            "wss://relay.nostr.wien",
-            "wss://relay.nostr.pt",
-            "wss://relay.piazza.today",
-            "wss://relay.exit.pub",
-            "wss://testnet.plebnet.dev/nostrrelay/1",
-            "wss://studio314.nostr1.com",
-            "wss://ch.purplerelay.com",
-            "wss://legend.lnbits.com/nostrclient/api/v1/relay",
-            "wss://us.nostr.land",
-            "wss://fl.purplerelay.com",
-            "wss://relay.minibits.cash",
-            "wss://us.nostr.wine",
-            "wss://frjosh.nostr1.com",
-            "wss://cellar.nostr.wine",
-            "wss://inbox.nostr.wine",
-            "wss://nostr.hubmaker.io",
-            "wss://shawn.nostr1.com",
-            "wss://relay.gems.xyz",
-            "wss://nostr-02.yakihonne.com",
-            "wss://obiurgator.thewhall.com",
-            "wss://relay.nos.social",
-            "wss://nostr.psychoet.nexus",
-            "wss://nostr.1661.io",
-            "wss://nostr.tavux.tech",
-            "wss://lnbits.aruku.kro.kr/nostrrelay/private",
-            "wss://relay.artx.market",
-            "wss://lnbits.btconsulting.nl/nostrrelay/nostr",
-            "wss://nostr-03.dorafactory.org",
-            "wss://nostr.atlbitlab.com",
-            "wss://nostr.zoel.network",
-            "wss://lnbits.papersats.io/nostrclient/api/v1/relay",
-            "wss://yondar.nostr1.com",
-            "wss://creatr.nostr.wine",
-            "wss://riray.nostr1.com",
-            "wss://nostr.pklhome.net",
-            "wss://relay.tunestr.io",
-            "wss://ren.nostr1.com",
-            "wss://theforest.nostr1.com",
-            "wss://nostrdevs.nostr1.com",
-            "wss://nostr.cahlen.org",
-            "wss://nostr.papanode.com",
-            "wss://milwaukie.nostr1.com",
-            "wss://strfry.chatbett.de",
-            "wss://relay.bitmapstr.io",
-            "wss://directory.yabu.me",
-            "wss://nostr.reckless.dev",
-            "wss://srtrelay.c-stellar.net",
-            "wss://nostr.lopp.social",
-            "wss://vanderwarker.dev/nostrclient/api/v1/relay",
-            "wss://relay.notoshi.win",
-            "wss://lnbits.satoshibox.io/nostrclient/api/v1/relay",
-            "wss://relay.zhoushen929.com",
-            "wss://relay.moinsen.com",
-            "wss://hayloo88.nostr1.com",
-            "wss://140.f7z.io",
-            "wss://jumpy-bamboo-euhyboma.scarab.im",
-            "wss://beijing.scarab.im",
-            "wss://mnl.v0l.io",
-            "wss://staging.yabu.me",
-            "wss://nostr.notribe.net",
-            "wss://rnostr.onrender.com",
-            "wss://nostr.ra-willi.com",
-            "wss://relay.swisslightning.net",
-            "wss://xxmmrr.shogatsu.ovh",
-            "wss://relay.agorist.space",
-            "wss://relay.lightningassets.art",
-            "wss://dev-relay.nostrassets.com",
-            "wss://nostr.jfischer.org",
-            "wss://frogathon.nostr1.com",
-            "wss://marmot.nostr1.com",
-            "wss://island.nostr1.com",
-            "wss://relay.angor.io",
-            "wss://relay.earthly.land",
-            "wss://jmoose.rocks",
-            "wss://test2.relay.report",
-            "wss://relay.strfront.com",
-            "wss://relay01.karma.svaha-chain.online",
-            "wss://nostr.cyberveins.eu",
-            "wss://relay.nostr.net",
-            "wss://beta.1661.io",
-            "wss://nostr.8k-lab.com",
-            "wss://relay.lawallet.ar",
-            "wss://relay.timechaindex.com",
-            "wss://relay.13room.space",
-            "wss://relay.westernbtc.com",
-            "wss://nostr.nobkslave.site",
-            "wss://fiatjaf.nostr1.com",
-            "wss://relay2.denostr.com",
-            "wss://relay.nip05.social",
-            "wss://bbb.santos.lol",
-            "wss://relay.cosmicbolt.net",
-        ]
-
-    @classmethod
     def _postprocess_relays(cls, relays) -> List[str]:
         preferred_relays = cls.preferred_relays()
         return preferred_relays + [r for r in relays if r not in preferred_relays]
@@ -482,20 +183,37 @@ class RelayList:
         if result:
             return cls._postprocess_relays(result)
         logger.debug(f"Return default list")
-        return cls._postprocess_relays(cls.default_delays())
+        return cls._postprocess_relays(default_delays())
 
 
 class BaseDM:
-    def __init__(self, event: Event = None, use_compression=True) -> None:
+    def __init__(
+        self,
+        event: Optional[Event] = None,
+        author: Optional[PublicKey] = None,
+        created_at: Optional[Timestamp] = None,
+        use_compression=True,
+    ) -> None:
         super().__init__()
         self.event = event
+        self.author = author
+        self.created_at = created_at
         self.use_compression = use_compression
+
+    @staticmethod
+    def delete_none_entries(d: Dict) -> Dict:
+        for key, value in list(d.items()):
+            if value is None:
+                del d[key]
+        return d
 
     def dump(self) -> Dict:
         d = self.__dict__.copy()
         del d["use_compression"]
         d["event"] = self.event.as_json() if self.event else None
-        return d
+        d["author"] = self.author.to_bech32() if self.author else None
+        d["created_at"] = self.created_at.as_secs() if self.created_at else None
+        return self.delete_none_entries(d)
 
     def serialize(self) -> str:
         d = self.dump()
@@ -514,7 +232,13 @@ class BaseDM:
     @classmethod
     def from_dump(cls, decoded_dict: Dict, network: bdk.Network):
         # decode the data from the string and ensure the type is
-        decoded_dict["event"] = Event.from_json(decoded_dict["event"]) if decoded_dict["event"] else None
+        decoded_dict["event"] = Event.from_json(decoded_dict["event"]) if decoded_dict.get("event") else None
+        decoded_dict["author"] = (
+            PublicKey.from_bech32(decoded_dict["author"]) if decoded_dict.get("author") else None
+        )
+        decoded_dict["created_at"] = (
+            Timestamp.from_secs(decoded_dict["created_at"]) if decoded_dict.get("created_at") else None
+        )
         return cls(**decoded_dict)
 
     @classmethod
@@ -527,7 +251,8 @@ class BaseDM:
                 decoded_dict = json.loads(base64_encoded_data)
                 return cls.from_dump(decoded_dict, network=network)
             except Exception:
-                logger.error(f"from_serialized: json.loads failed with {base64_encoded_data},  {network}")
+                pass
+                # logger.debug(f"from_serialized: json.loads failed with {base64_encoded_data},  {network}. Trying ")
 
         try:
             # try first the compressed decoding
@@ -559,10 +284,12 @@ class ProtocolDM(BaseDM):
         self,
         public_key_bech32: str,
         please_trust_public_key_bech32: str = None,
-        event: Event = None,
+        event: Optional[Event] = None,
+        author: Optional[PublicKey] = None,
+        created_at: Optional[Timestamp] = None,
         use_compression=True,
     ) -> None:
-        super().__init__(event=event, use_compression=use_compression)
+        super().__init__(event=event, author=author, created_at=created_at, use_compression=use_compression)
         self.public_key_bech32 = public_key_bech32
         # this is only when I want the recipient to trust me back
         self.please_trust_public_key_bech32 = please_trust_public_key_bech32
@@ -600,10 +327,12 @@ class BitcoinDM(BaseDM):
         description: str,
         data: Data = None,
         intended_recipient: str = None,
-        event: Event = None,
+        event: Optional[Event] = None,
+        author: Optional[PublicKey] = None,
+        created_at: Optional[Timestamp] = None,
         use_compression=True,
     ) -> None:
-        super().__init__(event=event, use_compression=use_compression)
+        super().__init__(event=event, author=author, created_at=created_at, use_compression=use_compression)
         self.label = label
         self.description = description
         self.data = data
@@ -613,7 +342,7 @@ class BitcoinDM(BaseDM):
         d = super().dump()
         d["label"] = self.label.value
         d["data"] = self.data.dump() if self.data else None
-        return d
+        return self.delete_none_entries(d)
 
     @classmethod
     def from_dump(cls, d: Dict, network: bdk.Network) -> "BitcoinDM":
@@ -653,20 +382,57 @@ class NotificationHandler(HandleNotification):
         self.signal_dm = signal_dm
         self.from_serialized = from_serialized
 
-    def is_dm_for_me(self, event: Event) -> bool:
-        if not event.kind().match_enum(KindEnum.ENCRYPTED_DIRECT_MESSAGE()):
+    def is_nip04_for_me(self, event: Event) -> bool:
+        if event.kind().as_enum() != DM_KIND:
             return False
-        recipient_public_key = get_recipient_public_key(event)
+        recipient_public_key = get_recipient_public_key_of_nip04(event)
         if not recipient_public_key:
             return False
         return recipient_public_key.to_bech32() == self.my_keys.public_key().to_bech32()
 
-    def handle_dm_event(self, event: Event):
-        recipient_public_key = get_recipient_public_key(event)
+    async def handle(self, relay_url, subscription_id, event: Event):
+        logger.debug(f"Received new {event.kind().as_enum()} event from {relay_url}:   {event.as_json()}")
+        if event.kind().as_enum() == KindEnum.ENCRYPTED_DIRECT_MESSAGE():
+            try:
+                self.handle_nip04_event(event)
+            except Exception as e:
+                logger.debug(f"Error during content NIP04 decryption: {e}")
+        elif event.kind().as_enum() == KindEnum.GIFT_WRAP():
+            logger.debug("Decrypting NIP59 event")
+            try:
+                # Extract rumor
+                # from_gift_wrap verifies the seal (encryption) was done correctly
+                # from_gift_wrap should fail, if it is not encrypted with my public key (so it is guaranteed to be for me)
+                unwrapped_gift = UnwrappedGift.from_gift_wrap(self.my_keys, event)
+                sender = unwrapped_gift.sender()
+
+                if sender.to_bech32() not in self.get_allow_keys_bech32():
+                    logger.debug(
+                        f"author {sender.to_bech32()} is not in allowlist {self.get_allow_keys_bech32()}"
+                    )
+                    return
+
+                logger.debug(f"unwrapped_gift {unwrapped_gift} sender={sender}")
+                rumor: UnsignedEvent = unwrapped_gift.rumor()
+
+                # Check timestamp of rumor
+                if rumor.kind().as_enum() == KindEnum.PRIVATE_DIRECT_MESSAGE():
+                    msg = rumor.content()
+                    logger.debug(f"Received new msg [sealed]: {msg}")
+                    self.handle_trusted_dm_for_me(event, sender, msg)
+                else:
+                    logger.error(f"Do not know how to handle {rumor.kind().as_enum()}.  {rumor.as_json()}")
+            except Exception as e:
+                logger.debug(f"Error during content NIP59 decryption: {e}")
+
+    def handle_nip04_event(self, event: Event):
+        assert event.kind().as_enum() == KindEnum.ENCRYPTED_DIRECT_MESSAGE()
+        recipient_public_key = get_recipient_public_key_of_nip04(event)
+        logger.debug(f"recipient_public_key = {recipient_public_key}  {event}")
         if not recipient_public_key:
             return
         logger.debug(f"dm recipient {recipient_public_key.to_bech32()}, author {event.author().to_bech32()}")
-        if not self.is_dm_for_me(event):
+        if not self.is_nip04_for_me(event):
             logger.debug("dm is not for me")
             return
 
@@ -678,8 +444,13 @@ class NotificationHandler(HandleNotification):
 
         base64_encoded_data = nip04_decrypt(self.my_keys.secret_key(), event.author(), event.content())
         # logger.debug(f"Decrypted dm to: {base64_encoded_data}")
+        self.handle_trusted_dm_for_me(event, event.author(), base64_encoded_data)
+
+    def handle_trusted_dm_for_me(self, event: Event, author: PublicKey, base64_encoded_data: str):
+
         nostr_dm = self.from_serialized(base64_encoded_data)
         nostr_dm.event = event
+        nostr_dm.author = author
 
         if self.dm_is_alreay_in_queue(nostr_dm):
             logger.debug(f"This nostr dm is already in the queue")
@@ -698,20 +469,12 @@ class NotificationHandler(HandleNotification):
                 return True
         return False
 
-    def handle(self, relay_url: str, subscription_id: str, event: Event):
-        # logger.debug(f"Received new event from {relay_url}: {event.as_json()}")
-        # logger.debug("Decrypting event")
-        try:
-            self.handle_dm_event(event)
-        except Exception as e:
-            logger.error(f"Error during handle: {str(e)} of {relay_url}")
-
-    def handle_msg(self, relay_url: str, msg: RelayMessage):
-        pass
-        # logger.debug(f"Received direct message: {msg}")
+    async def handle_msg(self, relay_url: str, msg: RelayMessage):
+        # logger.debug(f"handle_msg {relay_url}: {msg}")
+        None
 
 
-class DmConnection(QObject):
+class AsyncDmConnection(QObject):
     def __init__(
         self,
         signal_dm: pyqtSignal,
@@ -742,11 +505,17 @@ class DmConnection(QObject):
 
         # Initialize the client with the private key
         self.client = None
-        self.refresh_client()
 
-    def refresh_client(self):
+    async def init_client(self):
+        return await self.refresh_client()
+
+    async def disconnect(self):
         if self.client:
-            self.client.disconnect()
+            await self.client.disconnect()
+
+    async def refresh_client(self):
+        if self.client:
+            await self.client.disconnect()
 
         signer = NostrSigner.keys(self.keys)
         self.client = Client(signer)
@@ -758,7 +527,8 @@ class DmConnection(QObject):
             self.signal_dm,
             from_serialized=self.from_serialized,
         )
-        self.client.handle_notifications(self.notification_handler)
+        await self.client.handle_notifications(self.notification_handler)
+        # asyncio.create_task(self.client.handle_notifications(self.notification_handler))
 
     def get_currently_allowed(self) -> Set[str]:
         allow_list = set([k.to_bech32() for k in self.current_subscription_dict.values()])
@@ -773,38 +543,40 @@ class DmConnection(QObject):
                     return True
         return False
 
-    def get_connected_relays(self) -> List[Relay]:
+    async def get_connected_relays(self) -> List[Relay]:
+        relays = await self.client.relays()
         connected_relays: List[Relay] = [
-            relay for relay in self.client.relays().values() if relay.status() == RelayStatus.CONNECTED
+            relay for relay in relays.values() if await relay.status() == RelayStatus.CONNECTED
         ]
         # logger.debug(f"connected_relays = {connected_relays} of all relays {self.client.relays()}")
         return connected_relays
 
-    def send(self, dm: BaseDM, receiver: PublicKey) -> Optional[EventId]:
-        self.ensure_connected()
+    async def send(self, dm: BaseDM, receiver: PublicKey) -> Optional[EventId]:
+        await self.ensure_connected()
         try:
-            event_id = self.client.send_direct_msg(receiver, dm.serialize(), reply=None)
+            event_id = await self.client.send_private_msg(receiver, dm.serialize(), reply_to=None)
             logger.debug(f"sent {dm}")
             return event_id
         except Exception as e:
             logger.error(f"Error sending direct message: {e}")
             return None
 
-    def _get_filter(self, recipient: PublicKey, author: PublicKey, start_time: datetime = None):
-        this_filter = (
-            Filter()
-            .pubkeys([recipient])
-            .authors([author])
-            .kind(Kind.from_enum(KindEnum.ENCRYPTED_DIRECT_MESSAGE()))
-        )
+    def _get_filters(
+        self, recipient: PublicKey, author: PublicKey, start_time: datetime = None
+    ) -> List[Filter]:
+        this_filter = Filter().pubkeys([recipient]).authors([author]).kind(Kind.from_enum(DM_KIND))
         if start_time:
             this_filter = this_filter.since(timestamp=Timestamp.from_secs(int(start_time.timestamp())))
-        return this_filter
 
-    def _filters(self, author_public_keys: List[PublicKey], start_time: datetime = None) -> dict[str, Filter]:
+        nip59_filter = Filter().pubkey(recipient).kind(Kind.from_enum(KindEnum.GIFT_WRAP())).limit(0)
+        return [this_filter, nip59_filter]
+
+    def _filters(
+        self, author_public_keys: List[PublicKey], start_time: datetime = None
+    ) -> dict[str, List[Filter]]:
         recipient_public_key = self.keys.public_key()
         return {
-            author_public_key.to_bech32(): self._get_filter(
+            author_public_key.to_bech32(): self._get_filters(
                 recipient=recipient_public_key,
                 author=author_public_key,
                 start_time=start_time,
@@ -812,27 +584,30 @@ class DmConnection(QObject):
             for author_public_key in author_public_keys
         }
 
-    def subscribe(self, public_key: PublicKey, start_time: datetime = None) -> str:
+    async def subscribe(self, public_key: PublicKey, start_time: datetime = None) -> str:
         "overwrites previous filters"
-        if not self.get_connected_relays():
-            self.ensure_connected()
+        if not await self.get_connected_relays():
+            await self.ensure_connected()
 
         self._start_timer()
 
-        subscription_id = self.client.subscribe(
-            self._filters([public_key], start_time=start_time).values(), opts=None
-        )
+        filters = []
+        for pubkey_filters in self._filters([public_key], start_time=start_time).values():
+            filters += pubkey_filters
+        logger.debug(f"Subscribe to {filters}")
+        subscription_id = await self.client.subscribe(filters, opts=None)
+
         self.current_subscription_dict[subscription_id] = public_key
         logger.debug(f"Added subscription_id {subscription_id} for public_key {public_key.to_bech32()}")
         return subscription_id
 
-    def unsubscribe_all(self):
-        self.unsubscribe(list(self.current_subscription_dict.values()))
+    async def unsubscribe_all(self):
+        await self.unsubscribe(list(self.current_subscription_dict.values()))
 
-    def unsubscribe(self, public_keys: List[PublicKey]):
+    async def unsubscribe(self, public_keys: List[PublicKey]):
         for subscription_id, pub_key in list(self.current_subscription_dict.items()):
             if pub_key in public_keys:
-                self.client.unsubscribe(subscription_id)
+                await self.client.unsubscribe(subscription_id)
                 del self.current_subscription_dict[subscription_id]
 
     def _start_timer(self, delay_retry_connect=5):
@@ -844,8 +619,10 @@ class DmConnection(QObject):
         self.timer.timeout.connect(self.ensure_connected)
         self.timer.start()
 
-    def ensure_connected(self):
-        if len(self.get_connected_relays()) >= min(self.minimum_connect_relays, len(self.relay_list.relays)):
+    async def ensure_connected(self):
+        if len(await self.get_connected_relays()) >= min(
+            self.minimum_connect_relays, len(self.relay_list.relays)
+        ):
             return
 
         self.relay_list.update_if_stale()
@@ -853,14 +630,14 @@ class DmConnection(QObject):
         relay_subset = self.relay_list.get_subset(
             self.minimum_connect_relays + self.counter_no_connected_relay
         )
-        self.client.add_relays(relay_subset)
-        self.client.connect()
+        await self.client.add_relays(relay_subset)
+        await self.client.connect()
         logger.debug(
-            f"add_relay {relay_subset}, currently get_connected_relays={self.get_connected_relays()}"
+            f"add_relay {relay_subset}, currently get_connected_relays={await self.get_connected_relays()}"
         )
         # assume the connections are successfull
         # however if not, then next time try 1 more connection
-        sleep(0.1)
+        # sleep(0.1)
         self.counter_no_connected_relay += 1
 
     def dump(
@@ -887,18 +664,137 @@ class DmConnection(QObject):
     @classmethod
     def from_dump(
         cls, d: Dict, signal_dm: pyqtSignal, from_serialized: Callable[[str], BaseDM]
-    ) -> "DmConnection":
+    ) -> "AsyncDmConnection":
         d["keys"] = Keys(secret_key=SecretKey.from_bech32(d["keys"]))
 
         d["events"] = [Event.from_json(json_item) for json_item in d["events"]]
         d["relay_list"] = RelayList.from_dump(d["relay_list"]) if "relay_list" in d else None
 
-        return DmConnection(**d, signal_dm=signal_dm, from_serialized=from_serialized)
+        return cls(**d, signal_dm=signal_dm, from_serialized=from_serialized)
 
-    def replay_events(self):
+    async def replay_events(self):
         # now handle the events as if they came from a relay
         for event in self.events:
-            self.notification_handler.handle(relay_url="from_storage", event=event, subscription_id="replay")
+            await self.notification_handler.handle(
+                relay_url="from_storage", event=event, subscription_id="replay"
+            )
+
+
+class AsyncThread(QThread):
+    result_ready = pyqtSignal(object, object)  # Signal to return result with a callback
+
+    def __init__(self):
+        super().__init__()
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
+
+    def run(self):
+        self.loop.run_forever()
+
+    def run_coroutine(self, coro, on_done=None):
+        """Run coroutine and attach callback if provided."""
+
+        future = asyncio.run_coroutine_threadsafe(coro, self.loop)
+        future.add_done_callback(lambda f: self._handle_result(f, on_done))
+
+    def _handle_result(self, future, callback):
+        """Handle the result of the coroutine and emit signal with result and callback."""
+        result = future.result()
+        logger.debug(f"_handle_result {result, callback}")
+        self.result_ready.emit(result, callback)
+
+    @classmethod
+    def run_coroutine_blocking(cls, coro):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        result = loop.run_until_complete(coro)
+        loop.close()
+        return result
+
+
+class DmConnection(QObject):
+    def __init__(
+        self,
+        signal_dm: pyqtSignal,
+        from_serialized: Callable[[str], BaseDM],
+        keys: Keys,
+        use_timer: bool = False,
+        events: list[Event] = None,
+        allow_list: list[str] = None,
+        relay_list: RelayList = None,
+        async_dm_connection: AsyncDmConnection = None,
+    ) -> None:
+        super().__init__()
+
+        self.async_thread = AsyncThread()
+        self.async_thread.result_ready.connect(
+            lambda result, callback: callback(result)
+            if callback
+            else (logger.debug(f"Finished {callback} with result {result}" if result else None))
+        )
+        self.async_thread.start()
+
+        self.async_dm_connection = (
+            async_dm_connection
+            if async_dm_connection
+            else AsyncDmConnection(
+                signal_dm=signal_dm,
+                from_serialized=from_serialized,
+                keys=keys,
+                use_timer=use_timer,
+                events=events,
+                allow_list=allow_list,
+                relay_list=relay_list,
+            )
+        )
+
+        self.async_thread.run_coroutine(self.async_dm_connection.init_client(), on_done=None)
+
+    @classmethod
+    def from_dump(
+        cls, d: Dict, signal_dm: pyqtSignal, from_serialized: Callable[[str], BaseDM]
+    ) -> "DmConnection":
+        async_dm_connection = AsyncDmConnection.from_dump(
+            d, signal_dm=signal_dm, from_serialized=from_serialized
+        )
+
+        return cls(
+            **d, signal_dm=signal_dm, from_serialized=from_serialized, async_dm_connection=async_dm_connection
+        )
+
+    def dump(
+        self,
+        forbidden_data_types: List[DataType] = None,
+    ):
+        return self.async_dm_connection.dump(forbidden_data_types=forbidden_data_types)
+
+    def send(self, dm: BaseDM, receiver: PublicKey, on_done: Callable[[Optional[EventId]], None] = None):
+        self.async_thread.run_coroutine(self.async_dm_connection.send(dm, receiver), on_done=on_done)
+
+    def get_connected_relays(self) -> List[Relay]:
+        return self.async_thread.run_coroutine_blocking(self.async_dm_connection.get_connected_relays())
+
+    def unsubscribe_all(self, on_done: Callable[[], None] = None):
+        self.async_thread.run_coroutine(self.async_dm_connection.unsubscribe_all(), on_done=on_done)
+
+    def disconnect(self, on_done: Callable[[], None] = None):
+        self.async_thread.run_coroutine(self.async_dm_connection.disconnect(), on_done=on_done)
+
+    def refresh_client(self, on_done: Callable[[], None] = None):
+        self.async_thread.run_coroutine(self.async_dm_connection.refresh_client(), on_done=on_done)
+
+    def subscribe(
+        self, public_key: PublicKey, start_time: datetime = None, on_done: Callable[[str], None] = None
+    ):
+        self.async_thread.run_coroutine(
+            self.async_dm_connection.subscribe(public_key, start_time), on_done=on_done
+        )
+
+    def unsubscribe(self, public_keys: List[PublicKey], on_done: Callable[[], None] = None):
+        self.async_thread.run_coroutine(self.async_dm_connection.unsubscribe(public_keys), on_done=on_done)
+
+    def replay_events(self, on_done: Callable[[], None] = None):
+        self.async_thread.run_coroutine(self.async_dm_connection.replay_events(), on_done=on_done)
 
 
 class BaseProtocol(QObject):
@@ -933,12 +829,12 @@ class BaseProtocol(QObject):
         pass
 
     def refresh_dm_connection(self, keys: Keys = None, relay_list: RelayList = None):
-        keys = keys if keys else self.dm_connection.keys
-        relay_list = relay_list if relay_list else self.dm_connection.relay_list
+        keys = keys if keys else self.dm_connection.async_dm_connection.keys
+        relay_list = relay_list if relay_list else self.dm_connection.async_dm_connection.relay_list
 
-        self.dm_connection.client.disconnect()
-        self.dm_connection.keys = keys
-        self.dm_connection.relay_list = relay_list
+        self.dm_connection.disconnect()
+        self.dm_connection.async_dm_connection.keys = keys
+        self.dm_connection.async_dm_connection.relay_list = relay_list
         self.start_time = None
         self.dm_connection.refresh_client()
         # self.dm_connection = DmConnection(
@@ -973,15 +869,19 @@ class NostrProtocol(BaseProtocol):
         pass
 
     def publish_public_key(self, author_public_key: PublicKey, force=False):
-        logger.debug(f"starting publish_public_key {self.dm_connection.keys.public_key().to_bech32()}")
-        if not force and self.dm_connection.public_key_was_published(author_public_key):
+        logger.debug(
+            f"starting publish_public_key {self.dm_connection.async_dm_connection.keys.public_key().to_bech32()}"
+        )
+        if not force and self.dm_connection.async_dm_connection.public_key_was_published(author_public_key):
             logger.debug(f"{author_public_key.to_bech32()} was published already. No need to do it again")
             return
         dm = ProtocolDM(
             public_key_bech32=author_public_key.to_bech32(), event=None, use_compression=self.use_compression
         )
-        self.dm_connection.send(dm, self.dm_connection.keys.public_key())
-        logger.debug(f"done publish_public_key {self.dm_connection.keys.public_key().to_bech32()}")
+        self.dm_connection.send(dm, self.dm_connection.async_dm_connection.keys.public_key())
+        logger.debug(
+            f"done publish_public_key {self.dm_connection.async_dm_connection.keys.public_key().to_bech32()}"
+        )
 
     def publish_trust_me_back(self, author_public_key: PublicKey, recipient_public_key: PublicKey):
         dm = ProtocolDM(
@@ -990,10 +890,12 @@ class NostrProtocol(BaseProtocol):
             event=None,
             use_compression=self.use_compression,
         )
-        self.dm_connection.send(dm, self.dm_connection.keys.public_key())
+        self.dm_connection.send(dm, self.dm_connection.async_dm_connection.keys.public_key())
 
     def subscribe(self):
-        self.dm_connection.subscribe(self.dm_connection.keys.public_key(), start_time=self.start_time)
+        self.dm_connection.subscribe(
+            self.dm_connection.async_dm_connection.keys.public_key(), start_time=self.start_time
+        )
 
     def dump(self):
         return {
@@ -1061,7 +963,7 @@ class GroupChat(BaseProtocol):
             logger.debug(f"Sending not done, since self.members is empty")
 
     def members_including_me(self):
-        return self.members + [self.dm_connection.keys.public_key()]
+        return self.members + [self.dm_connection.async_dm_connection.keys.public_key()]
 
     def subscribe(self):
         for public_key in self.members_including_me():
