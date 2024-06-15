@@ -49,6 +49,7 @@ from nostr_sdk import (
 )
 
 from bitcoin_nostr_chat.default_relays import default_delays
+from bitcoin_nostr_chat.utils import filtered_for_init
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +146,7 @@ class RelayList:
     @classmethod
     def from_dump(cls, d: Dict) -> "RelayList":
         d["last_updated"] = datetime.fromtimestamp(d["last_updated"])
-        return cls(**d)
+        return cls(**filtered_for_init(d, cls))
 
     def update_relays(self):
         self.relays = self.get_relays()
@@ -239,7 +240,7 @@ class BaseDM:
         decoded_dict["created_at"] = (
             Timestamp.from_secs(decoded_dict["created_at"]) if decoded_dict.get("created_at") else None
         )
-        return cls(**decoded_dict)
+        return cls(**filtered_for_init(decoded_dict, cls))
 
     @classmethod
     def from_serialized(cls, base64_encoded_data: str, network: bdk.Network):
@@ -348,7 +349,7 @@ class BitcoinDM(BaseDM):
     def from_dump(cls, d: Dict, network: bdk.Network) -> "BitcoinDM":
         d["label"] = ChatLabel.from_value(d.get("label", ChatLabel.GroupChat.value))
         d["data"] = Data.from_dump(d["data"], network=network) if d.get("data") else None
-        return cls(**d)
+        return cls(**filtered_for_init(d, cls))
 
     def __eq__(self, other) -> bool:
         if not super().__eq__(other):
@@ -656,7 +657,7 @@ class AsyncDmConnection(QObject):
         d["relay_list"] = RelayList.from_dump(d["relay_list"]) if "relay_list" in d else None
 
         return cls(
-            **d,
+            **filtered_for_init(d, cls),
             signal_dm=signal_dm,
             from_serialized=from_serialized,
             get_currently_allowed=get_currently_allowed,
@@ -756,7 +757,7 @@ class DmConnection(QObject):
         )
 
         return cls(
-            **d,
+            **filtered_for_init(d, cls),
             signal_dm=signal_dm,
             from_serialized=from_serialized,
             async_dm_connection=async_dm_connection,
@@ -916,7 +917,7 @@ class NostrProtocol(BaseProtocol):
     def from_dump(cls, d: Dict, network: bdk.Network, use_compression=True) -> "NostrProtocol":
         d["start_time"] = datetime.fromtimestamp(d["start_time"])
 
-        return NostrProtocol(**d, network=network, use_compression=use_compression)
+        return cls(**filtered_for_init(d, cls), network=network, use_compression=use_compression)
 
 
 class GroupChat(BaseProtocol):
@@ -989,7 +990,7 @@ class GroupChat(BaseProtocol):
         d["start_time"] = datetime.fromtimestamp(d["start_time"])
 
         d["members"] = [PublicKey.from_bech32(pk) for pk in d["members"]]
-        return GroupChat(**d, network=network, use_compression=use_compression)
+        return cls(**filtered_for_init(d, cls), network=network, use_compression=use_compression)
 
     def renew_own_key(self):
         # send new key to memebers
