@@ -30,6 +30,8 @@
 import logging
 from datetime import datetime
 
+from bitcoin_nostr_chat.utils import filtered_for_init
+
 from .signals_min import SignalsMin
 
 logger = logging.getLogger(__name__)
@@ -225,7 +227,12 @@ class NostrSync(QObject):
             d["group_chat"], network=network, use_compression=use_compression
         )
 
-        sync = NostrSync(**d, network=network, signals_min=signals_min, use_compression=use_compression)
+        sync = cls(
+            **filtered_for_init(d, NostrSync),
+            network=network,
+            signals_min=signals_min,
+            use_compression=use_compression,
+        )
 
         # add the gui elements for the trusted members
         for member in sync.group_chat.members:
