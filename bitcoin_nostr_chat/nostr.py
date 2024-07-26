@@ -32,6 +32,7 @@ import json
 import logging
 from abc import abstractmethod
 from datetime import datetime, timedelta
+from time import sleep
 
 from nostr_sdk import (
     Client,
@@ -178,11 +179,18 @@ class RelayList:
         return preferred_relays + [r for r in relays if r not in preferred_relays]
 
     @classmethod
-    def get_relays(cls, nip: str = "4") -> List[str]:
-        result = fetch_and_parse_json(f"https://api.nostr.watch/v1/nip/{nip}")
-        logger.debug(f"fetch_and_parse_json returned {result}")
-        if result:
-            return cls._postprocess_relays(result)
+    def get_relays(cls, nips: List[int] = [17, 4]) -> List[str]:
+        all_relays: List[str] = []
+        for nip in nips:
+            url = f"https://api.nostr.watch/v1/nip/{nip}"
+            result = fetch_and_parse_json(url)
+            logger.debug(f"fetch_and_parse_json  {url} returned {result}")
+            if result:
+                all_relays += result
+
+        if all_relays:
+            return cls._postprocess_relays(all_relays)
+
         logger.debug(f"Return default list")
         return cls._postprocess_relays(default_delays())
 
@@ -563,7 +571,9 @@ class AsyncDmConnection(QObject):
         )
 
         if start_time:
-            this_filter = this_filter.since(timestamp=Timestamp.from_secs(int(start_time.timestamp())))
+            timestamp = Timestamp.from_secs(int(start_time.timestamp()))
+            logger.error(f"Subscribe to {recipient.to_bech32()} from {timestamp.to_human_datetime()}")
+            this_filter = this_filter.since(timestamp=timestamp)
 
         return [this_filter]
 
@@ -902,7 +912,7 @@ class NostrProtocol(BaseProtocol):
 
     def subscribe(self):
         def on_done(subscription_id: str):
-            logger.debug(f"Successfully subscribed to {subscription_id}")
+            logger.debug(f"{self.__class__.__name__}  Successfully subscribed to {subscription_id}")
 
         self.dm_connection.subscribe(start_time=None, on_done=on_done)
 
@@ -936,6 +946,7 @@ class GroupChat(BaseProtocol):
         self.members: List[PublicKey] = members if members else []
         self.network = network
         self.use_compression = use_compression
+        self.nip17_time_uncertainty = timedelta(weeks=1)
         super().__init__(
             keys=keys,
             dm_connection_dump=dm_connection_dump,
@@ -951,7 +962,8 @@ class GroupChat(BaseProtocol):
     def add_member(self, new_member: PublicKey):
         if new_member.to_bech32() not in [k.to_bech32() for k in self.members]:
             self.members.append(new_member)
-            self.dm_connection.subscribe(new_member)
+            # because NIP17, i only need to watch stuff that goes to me, no matter from whom
+            # self.dm_connection.subscribe( new_member)
             logger.debug(f"Add {new_member.to_bech32()} as trusted")
 
     def remove_member(self, remove_member: PublicKey):
@@ -974,7 +986,11 @@ class GroupChat(BaseProtocol):
         return self.members + [self.dm_connection.async_dm_connection.keys.public_key()]
 
     def subscribe(self):
-        self.dm_connection.subscribe(start_time=self.start_time)
+        def on_done(subscription_id: str):
+            logger.debug(f"{self.__class__.__name__}  Successfully subscribed to {subscription_id}")
+
+        start_time = self.start_time - self.nip17_time_uncertainty if self.start_time else self.start_time
+        self.dm_connection.subscribe(start_time=start_time, on_done=on_done)
 
     def dump(self):
         forbidden_data_types = [DataType.LabelsBip329]
@@ -1007,4 +1023,6 @@ class GroupChat(BaseProtocol):
             # self.dm_connection.send(ProtocolDM(event=None, public_key_bech32=keys.public_key().to_bech32(),please_trust_public_key_bech32=True), member)
             # logger.debug(f"Send my new public key {keys.public_key().to_bech32()} to {member.to_bech32()}")
 
+        # unclear why this is necessary...
+        sleep(0.1)
         self.refresh_dm_connection(Keys.generate())
