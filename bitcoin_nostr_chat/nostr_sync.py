@@ -176,8 +176,8 @@ class NostrSync(QObject):
 
     def renew_own_key(self):
         self.group_chat.renew_own_key()
-        self.publish_my_key_in_protocol()
         self.gui.set_my_key(self.group_chat.dm_connection.async_dm_connection.keys.public_key())
+        self.publish_my_key_in_protocol()
 
         # ask the members to trust my new key again (they need to manually approve)
         for member in self.group_chat.members:
@@ -243,7 +243,7 @@ class NostrSync(QObject):
             sync.gui.add_untrusted_device(untrusted_device)
             sync.trust_device(untrusted_device, show_message=False)
 
-        # restore chat texts
+        # restore/replay chat texts
         sync.nostr_protocol.dm_connection.replay_events()
         sync.group_chat.dm_connection.replay_events()
         return sync
