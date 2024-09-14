@@ -89,7 +89,7 @@ class MultiLineListView(QWidget):
         menu = QMenu(self)
 
         # Add actions to the menu
-        action1 = QAction("Delete all messages", self)
+        action1 = QAction(self.tr("Delete all messages"), self)
         menu.addAction(action1)
 
         # Connect actions to slots (functions)

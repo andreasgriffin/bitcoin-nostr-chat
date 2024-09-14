@@ -75,7 +75,7 @@ class RelayDialog(QDialog):
 
     def __init__(self, relay_list: RelayList = None, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Enter custom Nostr Relays")
+        self.setWindowTitle(self.tr("Enter custom Nostr Relays"))
 
         self.layout = QVBoxLayout(self)
 
