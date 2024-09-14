@@ -166,7 +166,6 @@ class RelayList:
     def preferred_relays(cls) -> List[str]:
         return [
             "wss://relay1.nostrchat.io",
-            "wss://relay.nostrati.com",
             "wss://relay.minibits.cash",
             "wss://us.nostr.wine",
             "wss://nostr.koning-degraaf.nl",
