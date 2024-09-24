@@ -27,6 +27,7 @@
 # SOFTWARE.
 
 
+import datetime
 import logging
 
 from bitcoin_nostr_chat.connected_devices.util import read_QIcon
@@ -52,7 +53,6 @@ from PyQt6.QtWidgets import (
     QApplication,
     QFileDialog,
     QHBoxLayout,
-    QLayout,
     QLineEdit,
     QListView,
     QMainWindow,
@@ -81,11 +81,11 @@ class MultiLineListView(QWidget):
         # Enable sorting
         self.model.setSortRole(self.ROLE_SORT)  # Use the display text for sorting
 
-        self.setLayout(QVBoxLayout())
-        self.layout().addWidget(self.listView)
-        self.layout().setContentsMargins(0, 0, 0, 0)  # Left, Top, Right, Bottom margins
+        self._layout = QVBoxLayout(self)
+        self._layout.addWidget(self.listView)
+        self._layout.setContentsMargins(0, 0, 0, 0)  # Left, Top, Right, Bottom margins
 
-    def contextMenuEvent(self, event: QContextMenuEvent) -> None:
+    def contextMenuEvent(self, event: QContextMenuEvent | None) -> None:
         menu = QMenu(self)
 
         # Add actions to the menu
@@ -96,14 +96,16 @@ class MultiLineListView(QWidget):
         action1.triggered.connect(self.on_delete_all_messages)
 
         # Pop up the menu at the current mouse position.
-        menu.exec(event.globalPos())
+        if event:
+            menu.exec(event.globalPos())
+        super().contextMenuEvent(event)
 
     def on_delete_all_messages(self):
         self.clearItems()
         self.update()
         self.signal_clear.emit()
 
-    def addItem(self, text: str, icon=None, timestamp=int) -> QStandardItem:
+    def addItem(self, text: str, timestamp: int, icon=None) -> QStandardItem:
         """Add an item with the specified text and an optional icon to the list."""
         item = QStandardItem()
         item.setText(text)
@@ -124,28 +126,23 @@ class MultiLineListView(QWidget):
         # Scroll to the item
         self.listView.scrollTo(index, QListView.ScrollHint.EnsureVisible)
 
-    def removeItemAtIndex(self, index: QModelIndex):
-        """Remove the item at the specified index."""
-        self.model.removeRow(index)
-
     def clearItems(self):
         """Clear all items from the list."""
         self.model.clear()
 
     def getItemTextAtIndex(self, index: QModelIndex):
         """Get the text of the item at the specified index."""
-        item = self.model.item(index)
+        item = self.model.itemFromIndex(index)
         if item:
             return item.text()
         return None
 
     def onItemClicked(self, index: QModelIndex):
-        self.model.itemFromIndex(index).text()
         self.itemClicked.emit(self.model.itemFromIndex(index))
 
 
 class FileObject:
-    def __init__(self, path: str, data: Data = None):
+    def __init__(self, path: str, data: Data | None = None):
         self.path = path
         self.data = data
 
@@ -158,7 +155,7 @@ class ChatListWidget(MultiLineListView):
         super().__init__()
         self.itemClicked.connect(self.onItemClicked)
 
-    def add_file(self, fileObject: FileObject, icon_path: str = None, timestamp=int) -> QStandardItem:
+    def add_file(self, fileObject: FileObject, timestamp: int, icon_path: str | None = None) -> QStandardItem:
         current_file_directory = os.path.dirname(os.path.abspath(__file__))
         icon_path = icon_path if icon_path else os.path.join(current_file_directory, "clip.svg")
 
@@ -170,7 +167,7 @@ class ChatListWidget(MultiLineListView):
         item.setData(fileObject, role=self.ROLE_DATA)
         return item
 
-    def onItemClicked(self, item: QStandardItem):
+    def onItemClicked(self, item: QStandardItem):  # type: ignore[override]
         # Retrieve the FileObject associated with the clicked item
         fileObject = item.data(self.ROLE_DATA)
         if fileObject:
@@ -189,10 +186,10 @@ class ChatGui(QWidget):
 
     def __init__(self, signals_min: SignalsMin):
         super().__init__()
-        self.setLayout(QVBoxLayout())
+        self._layout = QVBoxLayout(self)
         self.chat_list_display = ChatListWidget()
-        self.layout().setContentsMargins(0, 0, 0, 0)  # Left, Top, Right, Bottom margins
-        self.layout().addWidget(self.chat_list_display)
+        self._layout.setContentsMargins(0, 0, 0, 0)  # Left, Top, Right, Bottom margins
+        self._layout.addWidget(self.chat_list_display)
 
         self.textInput = QLineEdit()
         self.textInput.textChanged.connect(self.textChanged)
@@ -242,24 +239,24 @@ class ChatGui(QWidget):
 
     def updateDynamicLayout(self):
         threashold = 200
-        expected_layout_class: QLayout = QHBoxLayout if self.width() > threashold else QVBoxLayout
+        expected_layout_class = QHBoxLayout if self.width() > threashold else QVBoxLayout
         if isinstance(self.dynamicLayout, expected_layout_class):
             return
 
         # Clear the dynamic layout first
         while self.dynamicLayout.count():
-            child = self.dynamicLayout.takeAt(0)
-            if child.widget():
-                child.widget().setParent(None)
+            layout_item = self.dynamicLayout.takeAt(0)
+            if layout_item and (_widget := layout_item.widget()):
+                _widget.setParent(None)
 
         self.dynamicLayout = expected_layout_class()
         self.dynamicLayout.addWidget(self.textInput)
         self.dynamicLayout.addWidget(self.sendButton)
         self.dynamicLayout.addWidget(self.shareButton)
 
-        self.layout().addLayout(self.dynamicLayout)
+        self._layout.addLayout(self.dynamicLayout)
 
-    def resizeEvent(self, event: QResizeEvent) -> None:
+    def resizeEvent(self, event: QResizeEvent | None) -> None:
         self.updateDynamicLayout()
         super().resizeEvent(event)
 
@@ -271,20 +268,20 @@ class ChatGui(QWidget):
         self.textInput.clear()
         # self.add_own(text)
 
-    def _add_message(self, text: str, alignment: Qt.AlignmentFlag, color: str, timestamp=int):
+    def _add_message(self, text: str, alignment: Qt.AlignmentFlag, color: str, timestamp: int):
         item = self.chat_list_display.addItem(text, timestamp=timestamp)
         item.setTextAlignment(alignment)
         item.setForeground(QBrush(QColor(color)))
 
     def _add_file(
-        self, text: str, file_object: FileObject, alignment: Qt.AlignmentFlag, color: str, timestamp=int
+        self, text: str, file_object: FileObject, alignment: Qt.AlignmentFlag, color: str, timestamp: int
     ):
         item = self.chat_list_display.add_file(file_object, timestamp=timestamp)
         item.setTextAlignment(alignment)
         item.setForeground(QBrush(QColor(color)))
         item.setText(text)
 
-    def add_own(self, timestamp: int, text: str = "", file_object: FileObject = None):
+    def add_own(self, timestamp: int, text: str = "", file_object: FileObject | None = None):
         if file_object:
             self._add_file(
                 self.tr("Me: {text}").format(text=text),
@@ -302,7 +299,7 @@ class ChatGui(QWidget):
             )
 
     def add_other(
-        self, timestamp: int, text: str = "", file_object: FileObject = None, other_name: str = "Other"
+        self, timestamp: int, text: str = "", file_object: FileObject | None = None, other_name: str = "Other"
     ):
         if file_object:
             self._add_file(
@@ -328,9 +325,9 @@ if __name__ == "__main__":
             self.chatGui.signal_on_message_send.connect(self.handleMessage)
 
         def handleMessage(self, text):
-            self.chatGui.add_own_message(text)
+            self.chatGui.add_own(int(datetime.datetime.now().timestamp()), text)
             # Simulate other party response
-            self.chatGui.add_other_message(text)
+            self.chatGui.add_other(int(datetime.datetime.now().timestamp()), text)
 
     if __name__ == "__main__":
         app = QApplication(sys.argv)

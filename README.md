@@ -7,6 +7,6 @@ The actual single and group chats are based on a newly generated secret keys for
   * Each participant has to be manually accepted to be added to the group chat
   * Chats with participants use NIP17 and group messages are simply NIP17 messages to each participant 
 
-
+Export and restoring of the nsec and with it restoration of all messages of the relays
 
 
