@@ -29,6 +29,9 @@
 
 import logging
 
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QSplitter, QTextEdit, QVBoxLayout, QWidget
+
 from bitcoin_nostr_chat.connected_devices.util import read_QIcon
 
 from ..html import html_f
@@ -37,9 +40,9 @@ from ..signals_min import SignalsMin
 
 logger = logging.getLogger(__name__)
 
-from typing import Callable, List, Optional
+from typing import Callable, Generic, List, Optional, Type, TypeVar
 
-from nostr_sdk import PublicKey
+from nostr_sdk import Keys
 from PyQt6 import QtCore, QtWidgets
 from PyQt6.QtGui import QResizeEvent
 
@@ -47,7 +50,7 @@ from .chat_gui import ChatGui
 
 
 def short_key(pub_key_bech32: str):
-    return f"[{pub_key_bech32[-8:]}]"
+    return f"{pub_key_bech32[:12]}"
 
 
 import uuid
@@ -61,6 +64,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMenu,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QTextEdit,
@@ -73,11 +77,11 @@ from PyQt6.QtWidgets import (
 class RelayDialog(QDialog):
     signal_set_relays = pyqtSignal(RelayList)
 
-    def __init__(self, relay_list: RelayList = None, parent=None):
+    def __init__(self, relay_list: RelayList | None = None, parent=None):
         super().__init__(parent)
         self.setWindowTitle(self.tr("Enter custom Nostr Relays"))
 
-        self.layout = QVBoxLayout(self)
+        self._layout = QVBoxLayout(self)
 
         self.text_edit = QTextEdit(self)
         self.text_edit.setPlaceholderText(
@@ -85,7 +89,7 @@ class RelayDialog(QDialog):
         )
         if relay_list:
             self.text_edit.setText("\n".join(relay_list.relays))
-        self.layout.addWidget(self.text_edit)
+        self._layout.addWidget(self.text_edit)
 
         self.button_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok
@@ -95,8 +99,9 @@ class RelayDialog(QDialog):
         )
         self.button_box.accepted.connect(self.accept)
         self.button_box.rejected.connect(self.reject)
-        self.button_box.button(QDialogButtonBox.StandardButton.Reset).clicked.connect(self.on_reset)
-        self.layout.addWidget(self.button_box)
+        if reset_button := self.button_box.button(QDialogButtonBox.StandardButton.Reset):
+            reset_button.clicked.connect(self.on_reset)
+        self._layout.addWidget(self.button_box)
 
         self.accepted.connect(self.on_accepted)
 
@@ -118,6 +123,7 @@ class InvisibleScrollArea(QScrollArea):
         self.setStyleSheet(f"#{self.unique_id}" + " { background: transparent; border: none; }")
 
         self.content_widget = QWidget()
+        self.content_widget_layout = QVBoxLayout(self.content_widget)
         self.content_widget.setObjectName(f"{self.unique_id}_content")
         self.content_widget.setStyleSheet(
             f"#{self.unique_id}_content" + " { background: transparent; border: none; }"
@@ -146,10 +152,10 @@ class BaseDevice(QWidget):
         self.pub_key_bech32 = pub_key_bech32
         self.close_button: Optional[QPushButton] = None
 
-        self.setLayout(QtWidgets.QVBoxLayout())
-        self.layout().setContentsMargins(0, 0, 0, 0)  # Left, Top, Right, Bottom margins
+        self._layout = QtWidgets.QVBoxLayout(self)
+        self._layout.setContentsMargins(0, 0, 0, 0)  # Left, Top, Right, Bottom margins
 
-    def resizeEvent(self, event: QResizeEvent) -> None:
+    def resizeEvent(self, event: QResizeEvent | None) -> None:
         if self.close_button:
             self.close_button.move(self.width() - self.close_button.width(), 0)
 
@@ -168,7 +174,7 @@ class UnTrustedDevice(BaseDevice):
 
         self.button_add_trusted = QPushButton()
         self.button_add_trusted.clicked.connect(lambda: self.signal_trust_me.emit(pub_key_bech32))
-        self.layout().addWidget(self.button_add_trusted)
+        self._layout.addWidget(self.button_add_trusted)
         self.setMinimumHeight(self.button_add_trusted.sizeHint().height())
         self.timer = QTimer(self)
         self.updateUi()
@@ -212,13 +218,14 @@ class TrustedDevice(BaseDevice):
         self.signals_min = signals_min
 
         self.groupbox = QGroupBox()
+        self.groupbox_layout = QVBoxLayout(self.groupbox)
 
-        self.layout().addWidget(self.groupbox)
+        self._layout.addWidget(self.groupbox)
 
         self.groupbox.setLayout(QtWidgets.QVBoxLayout())
-        current_margins = self.groupbox.layout().contentsMargins()
+        current_margins = self.groupbox_layout.contentsMargins()
 
-        self.groupbox.layout().setContentsMargins(
+        self.groupbox_layout.setContentsMargins(
             current_margins.left(),
             int(current_margins.top() * 2),
             current_margins.right(),
@@ -248,10 +255,10 @@ class TrustedDevice(BaseDevice):
         self.groupbox.setFont(boldFont)
 
         self.label = QLabel()
-        self.groupbox.layout().addWidget(self.label)
+        self.groupbox_layout.addWidget(self.label)
         self.chat_gui = ChatGui(signals_min=self.signals_min)
         self.chat_gui.setVisible(chat_visible)
-        self.groupbox.layout().addWidget(self.chat_gui)
+        self.groupbox_layout.addWidget(self.chat_gui)
         self.setMinimumHeight(self.groupbox.sizeHint().height())
 
         self.create_close_button()
@@ -264,7 +271,7 @@ class TrustedDevice(BaseDevice):
         signals_min.language_switch.connect(self.updateUi)
 
     def updateUi(self):
-        self.groupbox.setTitle(self.tr("Device id: {id}").format(id=short_key(self.pub_key_bech32)))
+        self.groupbox.setTitle(self.tr("Connected to {id}").format(id=short_key(self.pub_key_bech32)))
         self.label = QLabel(
             f""" <ul>
                         <li>{self.tr('Syncing Address labels')}</li>
@@ -282,37 +289,43 @@ class TrustedDevice(BaseDevice):
         )
 
 
-class DeviceList(QtWidgets.QWidget):
+T = TypeVar("T", bound=BaseDevice)
+
+
+class DeviceList(Generic[T], QtWidgets.QWidget):
     signal_added_device = QtCore.pyqtSignal(TrustedDevice)
 
-    def __init__(self):
+    def __init__(
+        self,
+        device_class: Type[T],
+    ):
         super().__init__()
+        self.device_class = device_class
 
         self.main_layout = QtWidgets.QVBoxLayout(self)
         self.main_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
         self.main_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.scrollarea = InvisibleScrollArea()
-        self.scrollarea.content_widget.setLayout(QtWidgets.QVBoxLayout())
+        self.scrollarea = InvisibleScrollArea(parent=self)
         self.scrollarea.setWidgetResizable(True)
 
-        self.scrollarea.content_widget.layout().setContentsMargins(0, 0, 0, 0)  # Set all margins to zero
-        self.scrollarea.content_widget.layout().setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
+        self.scrollarea.content_widget_layout.setContentsMargins(0, 0, 0, 0)  # Set all margins to zero
+        self.scrollarea.content_widget_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
 
         self.main_layout.addWidget(self.scrollarea)
 
-    def add_device(self, device: BaseDevice) -> bool:
+    def add_device(self, device: T) -> bool:
         if self.device_already_present(device.pub_key_bech32):
             return False
         device.signal_close.connect(self.remove_device)
 
-        self.scrollarea.content_widget.layout().addWidget(device)
+        self.scrollarea.content_widget_layout.addWidget(device)
         self.signal_added_device.emit(device)
         return True
 
-    def remove_device(self, device: BaseDevice):
+    def remove_device(self, device: T):
         device.setParent(None)
-        self.scrollarea.content_widget.layout().removeWidget(device)
+        self.scrollarea.content_widget_layout.removeWidget(device)
 
         device.close()
         device.deleteLater()
@@ -323,88 +336,98 @@ class DeviceList(QtWidgets.QWidget):
                 return True
         return False
 
-    def get_device(self, pub_key_bech32: str) -> Optional[BaseDevice]:
+    def get_device(self, pub_key_bech32: str) -> Optional[T]:
         for device in self.get_devices():
             if device.pub_key_bech32 == pub_key_bech32:
                 return device
         return None
 
-    def get_devices(self) -> List[BaseDevice]:
-        return self.scrollarea.content_widget.findChildren(BaseDevice)
-
-
-class UnTrustedDeviceList(DeviceList):
-    pass
-
-
-class TrustedDeviceList(DeviceList):
-    pass
+    def get_devices(self) -> List[T]:
+        return self.scrollarea.content_widget.findChildren(self.device_class)
 
 
 class ConnectedDevices(QtWidgets.QWidget):
     signal_trust_device = QtCore.pyqtSignal(UnTrustedDevice)
     signal_untrust_device = QtCore.pyqtSignal(TrustedDevice)
-    signal_renew_keys = QtCore.pyqtSignal()
+    signal_set_keys = QtCore.pyqtSignal()
+    signal_reset_keys = QtCore.pyqtSignal()
     signal_set_relays = QtCore.pyqtSignal(RelayList)
 
     def __init__(
         self,
-        my_key: PublicKey,
+        my_keys: Keys,
         signals_min: SignalsMin,
         individual_chats_visible=True,
-        get_relay_list: Callable[[], Optional[RelayList]] = None,
+        get_relay_list: Callable[[], Optional[RelayList]] | None = None,
     ) -> None:
         super().__init__()
         self.signals_min = signals_min
         self.individual_chats_visible = individual_chats_visible
-        self.my_key = my_key
+        self.my_keys = my_keys
         self.get_relay_list = get_relay_list
 
-        self.setLayout(QHBoxLayout())
+        self._layout = QHBoxLayout(self)
+
+        self.splitter = QSplitter(Qt.Orientation.Horizontal)
+        self._layout.addWidget(self.splitter)
 
         left_side = QWidget()
-        self.layout().addWidget(left_side)
-        left_side.setLayout(QVBoxLayout())
+        left_side_layout = QVBoxLayout(left_side)
+        self.splitter.addWidget(left_side)
 
         header = QWidget()
-        header.setLayout(QHBoxLayout())
-        header.layout().setContentsMargins(0, 0, 0, 0)  # Left, Top, Right, Bottom margins
-        left_side.layout().addWidget(header)
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(0, 0, 0, 0)  # Left, Top, Right, Bottom margins
+        left_side_layout.addWidget(header)
 
         self.title_label = QLabel()
-        header.layout().addWidget(self.title_label)
+        header_layout.addWidget(self.title_label)
 
         toolbar_button = QToolButton()
         toolbar_button.setIcon(read_QIcon("preferences.png"))
-        header.layout().addWidget(toolbar_button)
+        header_layout.addWidget(toolbar_button)
 
         menu = QMenu(self)
-        self.action_reset_identity = menu.addAction("", self.signal_renew_keys.emit)
+        self.action_export_identity = menu.addAction("", self.export_sync_key)
+        self.action_set_keys = menu.addAction("", self.signal_set_keys.emit)
+        self.action_reset_identity = menu.addAction("", self.signal_reset_keys.emit)
         self.action_set_relays = menu.addAction("", self.ask_for_nostr_relays)
         toolbar_button.setMenu(menu)
         toolbar_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         toolbar_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
         self.group_trusted = QGroupBox()
-        left_side.layout().addWidget(self.group_trusted)
+        self.group_trusted_layout = QVBoxLayout(self.group_trusted)
+        left_side_layout.addWidget(self.group_trusted)
 
-        self.trusted_devices = TrustedDeviceList()
-        self.group_trusted.setLayout(QVBoxLayout())
-        self.group_trusted.layout().addWidget(self.trusted_devices)
+        self.trusted_devices = DeviceList(TrustedDevice)
+        self.group_trusted_layout.addWidget(self.trusted_devices)
 
         self.group_untrusted = QGroupBox()
-        left_side.layout().addWidget(self.group_untrusted)
+        self.group_untrusted_layout = QVBoxLayout(self.group_untrusted)
+        left_side_layout.addWidget(self.group_untrusted)
 
-        self.untrusted_devices = UnTrustedDeviceList()
-        self.group_untrusted.setLayout(QVBoxLayout())
-        self.group_untrusted.layout().addWidget(self.untrusted_devices)
+        self.untrusted_devices = DeviceList(UnTrustedDevice)
+        self.group_untrusted_layout.addWidget(self.untrusted_devices)
 
         self.groupchat_gui = ChatGui(signals_min=self.signals_min)
 
         self.updateUi()
-        self.layout().addWidget(self.groupchat_gui)
+        self.splitter.addWidget(self.groupchat_gui)
 
         self.signals_min.language_switch.connect(self.updateUi)
+
+    def export_sync_key(self):
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Icon.Information)
+        msg.setText(
+            self.tr(
+                "Your sync key is:\n\n{sync_key}\n\n You can import it into any nostr client that supports NIP-17."
+            ).format(sync_key=self.my_keys.secret_key().to_bech32())
+        )
+        msg.setWindowTitle(self.tr("Sync key Export"))
+        msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+        msg.exec()
 
     def ask_for_nostr_relays(self):
         dialog = RelayDialog(relay_list=self.get_relay_list() if self.get_relay_list else None)
@@ -412,19 +435,28 @@ class ConnectedDevices(QtWidgets.QWidget):
         dialog.exec()
 
     def updateUi(self):
-        self.action_reset_identity.setText(self.tr("Reset identity for this device"))
-        self.action_set_relays.setText(self.tr("Set custom Relay list"))
+        if self.action_export_identity:
+            self.action_export_identity.setText(self.tr("Export sync key"))
+        if self.action_set_keys:
+            self.action_set_keys.setText(self.tr("Import sync key"))
+        if self.action_reset_identity:
+            self.action_reset_identity.setText(self.tr("Reset sync key"))
+        if self.action_set_relays:
+            self.action_set_relays.setText(self.tr("Set custom Relay list"))
         self.group_trusted.setTitle(self.tr("Trusted"))
         self.group_untrusted.setTitle(self.tr("UnTrusted"))
-        if not self.my_key:
+        if not self.my_keys:
             self.title_label.setText("")
         else:
             self.title_label.setText(
-                html_f(self.tr("My id: {id}").format(id=short_key(self.my_key.to_bech32())), bf=True)
+                html_f(
+                    self.tr("My Device: {id}").format(id=short_key(self.my_keys.public_key().to_bech32())),
+                    bf=True,
+                )
             )
 
-    def set_my_key(self, my_key: PublicKey):
-        self.my_key = my_key
+    def set_my_keys(self, my_keys: Keys):
+        self.my_keys = my_keys
         self.updateUi()
 
     def add_trusted_device(self, device: TrustedDevice):
@@ -456,10 +488,10 @@ class ConnectedDevices(QtWidgets.QWidget):
     def trust_device(
         self,
         untrusted_device: UnTrustedDevice,
-        callback_on_message_send: Callable = None,
-        callback_share_filepath: Callable = None,
-        callback_attachement_clicked: Callable = None,
-        callback_clear_chat: Callable = None,
+        callback_on_message_send: Callable | None = None,
+        callback_share_filepath: Callable | None = None,
+        callback_attachement_clicked: Callable | None = None,
+        callback_clear_chat: Callable | None = None,
     ) -> TrustedDevice:
         self.untrusted_devices.remove_device(untrusted_device)
 
@@ -476,7 +508,7 @@ class ConnectedDevices(QtWidgets.QWidget):
             trusted_device.chat_gui.signal_on_message_send.connect(callback_on_message_send)
         if callback_share_filepath:
             trusted_device.chat_gui.signal_share_filepath.connect(callback_share_filepath)
-        if callback_share_filepath:
+        if callback_attachement_clicked:
             trusted_device.chat_gui.chat_list_display.signal_attachement_clicked.connect(
                 callback_attachement_clicked
             )

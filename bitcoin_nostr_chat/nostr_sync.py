@@ -30,6 +30,7 @@
 import logging
 from datetime import datetime
 
+from bitcoin_nostr_chat.dialogs import SecretKeyDialog, create_custom_message_box
 from bitcoin_nostr_chat.utils import filtered_for_init
 
 from .signals_min import SignalsMin
@@ -62,6 +63,7 @@ from .nostr import (
     NostrProtocol,
     ProtocolDM,
     RelayList,
+    SecretKey,
 )
 
 
@@ -93,7 +95,7 @@ def file_to_str(file_path: str):
 class NostrSync(QObject):
     signal_add_trusted_device = pyqtSignal(TrustedDevice)
     signal_attachement_clicked = pyqtSignal(FileObject)
-    signal_label_bip329_received = pyqtSignal(Data)
+    signal_label_bip329_received = pyqtSignal(Data, PublicKey)  # Data, Author
 
     def __init__(
         self,
@@ -104,9 +106,11 @@ class NostrSync(QObject):
         individual_chats_visible=True,
         hide_data_types_in_chat: tuple[DataType] = (DataType.LabelsBip329,),
         use_compression=True,
+        debug=False,
     ) -> None:
         super().__init__()
         self.network = network
+        self.debug = debug
         self.nostr_protocol = nostr_protocol
         self.group_chat = group_chat
         self.hide_data_types_in_chat = hide_data_types_in_chat
@@ -114,7 +118,7 @@ class NostrSync(QObject):
         self.use_compression = use_compression
 
         self.gui = ConnectedDevices(
-            my_key=self.group_chat.dm_connection.async_dm_connection.keys.public_key(),
+            my_keys=self.group_chat.dm_connection.async_dm_connection.keys,
             individual_chats_visible=individual_chats_visible,
             signals_min=signals_min,
             get_relay_list=self.get_connected_relays,
@@ -131,7 +135,8 @@ class NostrSync(QObject):
         self.gui.signal_trust_device.connect(self.trust_device)
         self.gui.signal_untrust_device.connect(self.untrust_device)
         self.signal_attachement_clicked.connect(self.on_signal_attachement_clicked)
-        self.gui.signal_renew_keys.connect(self.renew_own_key)
+        self.gui.signal_reset_keys.connect(self.reset_own_key)
+        self.gui.signal_set_keys.connect(self.set_own_key)
         self.gui.groupchat_gui.chat_list_display.signal_clear.connect(
             lambda: self.on_clear_chat_from_memory(chat_label=ChatLabel.GroupChat)
         )
@@ -155,7 +160,7 @@ class NostrSync(QObject):
             == self.group_chat.dm_connection.async_dm_connection.keys.public_key().to_bech32()
         )
 
-    def on_clear_chat_from_memory(self, chat_label: ChatLabel, counterparty_key_bech32: str = None):
+    def on_clear_chat_from_memory(self, chat_label: ChatLabel, counterparty_key_bech32: str | None = None):
         def should_remove_item(item: BaseDM) -> bool:
             if isinstance(item, BitcoinDM):
                 if item.label == chat_label:
@@ -174,9 +179,22 @@ class NostrSync(QObject):
             if should_remove_item(item):
                 self.group_chat.dm_connection.async_dm_connection.queue.remove(item)
 
-    def renew_own_key(self):
-        self.group_chat.renew_own_key()
-        self.gui.set_my_key(self.group_chat.dm_connection.async_dm_connection.keys.public_key())
+    def set_own_key(self):
+        nsec = SecretKeyDialog().get_secret_key()
+        if not nsec:
+            return
+        try:
+            keys = Keys(SecretKey.from_bech32(nsec))
+            self.reset_own_key(keys=keys)
+        except:
+            create_custom_message_box(
+                QMessageBox.Icon.Warning, "Error", f"Error in importing the nsec {nsec}"
+            )
+            return
+
+    def reset_own_key(self, keys: Keys = None):
+        self.group_chat.renew_own_key(keys=keys)
+        self.gui.set_my_keys(self.group_chat.dm_connection.async_dm_connection.keys)
         self.publish_my_key_in_protocol()
 
         # ask the members to trust my new key again (they need to manually approve)
@@ -214,24 +232,19 @@ class NostrSync(QObject):
         d["nostr_protocol"] = self.nostr_protocol.dump()
         d["group_chat"] = self.group_chat.dump()
         d["individual_chats_visible"] = self.gui.individual_chats_visible
+        d["network"] = self.network.name
+        d["debug"] = self.debug
         return d
 
     @classmethod
-    def from_dump(
-        cls, d: Dict[str, Any], network: bdk.Network, signals_min: SignalsMin, use_compression=True
-    ) -> "NostrSync":
-        d["nostr_protocol"] = NostrProtocol.from_dump(
-            d["nostr_protocol"], network=network, use_compression=use_compression
-        )
-        d["group_chat"] = GroupChat.from_dump(
-            d["group_chat"], network=network, use_compression=use_compression
-        )
+    def from_dump(cls, d: Dict[str, Any], signals_min: SignalsMin) -> "NostrSync":
+        d["nostr_protocol"] = NostrProtocol.from_dump(d["nostr_protocol"])
+        d["group_chat"] = GroupChat.from_dump(d["group_chat"])
+        d["network"] = bdk.Network[d["network"]]
 
         sync = cls(
             **filtered_for_init(d, NostrSync),
-            network=network,
             signals_min=signals_min,
-            use_compression=use_compression,
         )
 
         # add the gui elements for the trusted members
@@ -270,9 +283,12 @@ class NostrSync(QObject):
             logger.debug(f"Dropping {dm}, because not author, and with that author can be determined.")
             return
 
-        if dm.data and dm.data.data_type == DataType.LabelsBip329 and not self.is_me(dm.author):
+        if self.debug:
+            self.add_debug_to_chat(dm)
+
+        if dm.data and dm.data.data_type == DataType.LabelsBip329:
             # only emit a signal if I didn't send it
-            self.signal_label_bip329_received.emit(dm.data)
+            self.signal_label_bip329_received.emit(dm.data, dm.author)
 
         if dm.data and dm.data.data_type in self.hide_data_types_in_chat:
             # do not display it in chat
@@ -293,6 +309,31 @@ class NostrSync(QObject):
             self.untrust_device(trusted_device)
         else:
             self.group_chat.remove_member(member)
+
+    def add_debug_to_chat(self, dm: BitcoinDM):
+        file_object = FileObject(path=dm.description, data=dm.data) if dm.data else None
+
+        if dm.label == ChatLabel.GroupChat:
+            chat_gui = self.gui.groupchat_gui
+        elif dm.label == ChatLabel.SingleRecipient:
+            trusted_device = self.get_trusted_device_of_single_recipient_dm(dm)
+            if not trusted_device:
+                return
+            chat_gui = trusted_device.chat_gui
+
+        if self.is_me(dm.author):
+            chat_gui.add_own(
+                text=str(dm),
+                file_object=file_object,
+                timestamp=dm.created_at.as_secs() if dm.created_at else datetime.now().timestamp(),
+            )
+        else:
+            chat_gui.add_other(
+                text=str(dm),
+                file_object=file_object,
+                other_name=short_key(dm.author.to_bech32()) if dm.author else "Unknown",
+                timestamp=dm.created_at.as_secs() if dm.created_at else datetime.now().timestamp(),
+            )
 
     def add_to_chat(self, dm: BitcoinDM):
         text = dm.description
@@ -353,12 +394,11 @@ class NostrSync(QObject):
             )
         )
 
-    def filepath_to_dm(self, label: ChatLabel, file_path: str):
+    def filepath_to_dm(self, label: ChatLabel, file_path: str) -> BitcoinDM:
         s = file_to_str(file_path)
         bitcoin_data = Data.from_str(s, network=self.network)
         if not bitcoin_data:
-            logger.warning(f"Could not recognize {s} as BitcoinData")
-            return
+            raise Exception(f"Could not recognize {s} as BitcoinData")
         dm = BitcoinDM(
             label=label,
             description=os.path.basename(file_path),
@@ -369,7 +409,13 @@ class NostrSync(QObject):
         return dm
 
     def on_share_filepath_in_groupchat(self, file_path: str):
-        dm = self.filepath_to_dm(label=ChatLabel.GroupChat, file_path=file_path)
+        try:
+            dm = self.filepath_to_dm(label=ChatLabel.GroupChat, file_path=file_path)
+        except Exception:
+            create_custom_message_box(
+                QMessageBox.Icon.Warning, "Error", f"{file_path} could not be recognized as Bitcoin data"
+            )
+            return
         self.group_chat.send(dm)
         # after sending add the author  (sending it in the dm would be redundant)
         dm.author = self.group_chat.dm_connection.async_dm_connection.keys.public_key()
@@ -430,7 +476,13 @@ class NostrSync(QObject):
             )
 
         def callback_share_filepath(file_path: str):
-            dm = self.filepath_to_dm(label=ChatLabel.SingleRecipient, file_path=file_path)
+            try:
+                dm = self.filepath_to_dm(label=ChatLabel.SingleRecipient, file_path=file_path)
+            except Exception:
+                create_custom_message_box(
+                    QMessageBox.Icon.Warning, "Error", f"{file_path} could not be recognized as Bitcoin data"
+                )
+                return
             receiver = PublicKey.from_bech32(untrusted_device.pub_key_bech32)
             self.group_chat.dm_connection.send(
                 dm, receiver=receiver, on_done=lambda event_id: send_copy_to_myself(dm, receiver, event_id)

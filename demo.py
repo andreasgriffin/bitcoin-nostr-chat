@@ -70,9 +70,7 @@ class DemoApp(QMainWindow):
 
         d = load_dict_from_file(file_name)
         if d:
-            self.nostr_sync = NostrSync.from_dump(
-                d, network=bdk.Network.REGTEST, signals_min=signals_min, use_compression=use_compression
-            )
+            self.nostr_sync = NostrSync.from_dump(d, signals_min=signals_min)
         else:
 
             keys = Keys(
@@ -90,9 +88,10 @@ class DemoApp(QMainWindow):
         self.setCentralWidget(self.nostr_sync.gui)
         self.setWindowTitle("Demo App")
 
-    def closeEvent(self, event: QCloseEvent) -> None:
+    def closeEvent(self, event: QCloseEvent | None) -> None:
         save_dict_to_file(self.nostr_sync.dump(), self.file_name)
-        event.accept()  # Proceed to close the application
+        if event:
+            event.accept()  # Proceed to close the application
 
 
 def parse_args():
