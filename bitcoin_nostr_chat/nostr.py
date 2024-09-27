@@ -403,7 +403,7 @@ class NotificationHandler(HandleNotification):
         self.from_serialized = from_serialized
 
     def is_allowed_message(self, recipient_public_key: PublicKey, author: PublicKey) -> bool:
-        logger.debug(f"recipient_public_key = {recipient_public_key}   ")
+        logger.debug(f"recipient_public_key = {recipient_public_key.to_bech32()}   ")
         if not recipient_public_key:
             logger.debug("recipient_public_key not set")
             return False
@@ -970,7 +970,9 @@ class GroupChat(BaseProtocol):
         self.members: List[PublicKey] = members if members else []
         self.network = network
         self.use_compression = use_compression
-        self.nip17_time_uncertainty = timedelta(weeks=1)
+        self.nip17_time_uncertainty = timedelta(
+            days=2
+        )  # 2 days according to https://github.com/nostr-protocol/nips/blob/master/17.md#encrypting
         super().__init__(
             keys=keys,
             dm_connection_dump=dm_connection_dump,
