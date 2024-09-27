@@ -100,6 +100,7 @@ class SecretKeyDialog(QDialog):
 
         # Line edit for secret key input
         self.secret_key_input = QLineEdit(self)
+        self.secret_key_input.setPlaceholderText("nsec...")
         self.secret_key_input.setEchoMode(QLineEdit.EchoMode.Password)  # Mask input for security
         layout.addWidget(self.secret_key_input)
 

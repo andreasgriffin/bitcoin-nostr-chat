@@ -403,7 +403,7 @@ class NotificationHandler(HandleNotification):
         self.from_serialized = from_serialized
 
     def is_allowed_message(self, recipient_public_key: PublicKey, author: PublicKey) -> bool:
-        logger.debug(f"recipient_public_key = {recipient_public_key}   ")
+        logger.debug(f"recipient_public_key = {recipient_public_key.to_bech32()}   ")
         if not recipient_public_key:
             logger.debug("recipient_public_key not set")
             return False
