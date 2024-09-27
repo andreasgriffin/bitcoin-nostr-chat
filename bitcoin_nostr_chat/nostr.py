@@ -970,7 +970,9 @@ class GroupChat(BaseProtocol):
         self.members: List[PublicKey] = members if members else []
         self.network = network
         self.use_compression = use_compression
-        self.nip17_time_uncertainty = timedelta(weeks=1)
+        self.nip17_time_uncertainty = timedelta(
+            days=2
+        )  # 2 days according to https://github.com/nostr-protocol/nips/blob/master/17.md#encrypting
         super().__init__(
             keys=keys,
             dm_connection_dump=dm_connection_dump,
