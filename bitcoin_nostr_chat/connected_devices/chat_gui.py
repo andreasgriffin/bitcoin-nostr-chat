@@ -27,8 +27,8 @@
 # SOFTWARE.
 
 
-import datetime
 import logging
+from datetime import datetime
 
 from bitcoin_nostr_chat.connected_devices.util import read_QIcon
 
@@ -105,7 +105,7 @@ class MultiLineListView(QWidget):
         self.update()
         self.signal_clear.emit()
 
-    def addItem(self, text: str, timestamp: int | float, icon=None) -> QStandardItem:
+    def addItem(self, text: str, created_at: datetime, icon=None) -> QStandardItem:
         """Add an item with the specified text and an optional icon to the list."""
         item = QStandardItem()
         item.setText(text)
@@ -113,7 +113,7 @@ class MultiLineListView(QWidget):
             item.setIcon(QIcon(icon))
         item.setEditable(False)
         self.model.appendRow(item)
-        item.setData(timestamp, self.ROLE_SORT)
+        item.setData(created_at, self.ROLE_SORT)
 
         # Sort the model initially
         self.model.sort(0)  # Sort by the first (and only) column
@@ -156,7 +156,7 @@ class ChatListWidget(MultiLineListView):
         self.itemClicked.connect(self.onItemClicked)
 
     def add_file(
-        self, fileObject: FileObject, timestamp: int | float, icon_path: str | None = None
+        self, fileObject: FileObject, created_at: datetime, icon_path: str | None = None
     ) -> QStandardItem:
         current_file_directory = os.path.dirname(os.path.abspath(__file__))
         icon_path = icon_path if icon_path else os.path.join(current_file_directory, "clip.svg")
@@ -164,7 +164,7 @@ class ChatListWidget(MultiLineListView):
         item = self.addItem(
             os.path.basename(fileObject.path),
             icon=QIcon(icon_path) if icon_path else None,
-            timestamp=timestamp,
+            created_at=created_at,
         )
         item.setData(fileObject, role=self.ROLE_DATA)
         return item
@@ -270,8 +270,8 @@ class ChatGui(QWidget):
         self.textInput.clear()
         # self.add_own(text)
 
-    def _add_message(self, text: str, alignment: Qt.AlignmentFlag, color: str, timestamp: int | float):
-        item = self.chat_list_display.addItem(text, timestamp=timestamp)
+    def _add_message(self, text: str, alignment: Qt.AlignmentFlag, color: str, created_at: datetime):
+        item = self.chat_list_display.addItem(text, created_at=created_at)
         item.setTextAlignment(alignment)
         item.setForeground(QBrush(QColor(color)))
 
@@ -281,44 +281,48 @@ class ChatGui(QWidget):
         file_object: FileObject,
         alignment: Qt.AlignmentFlag,
         color: str,
-        timestamp: int | float,
+        created_at: datetime,
     ):
-        item = self.chat_list_display.add_file(file_object, timestamp=timestamp)
+        item = self.chat_list_display.add_file(file_object, created_at=created_at)
         item.setTextAlignment(alignment)
         item.setForeground(QBrush(QColor(color)))
         item.setText(text)
 
-    def add_own(self, timestamp: int | float, text: str = "", file_object: FileObject | None = None):
+    def add_own(self, created_at: datetime, text: str = "", file_object: FileObject | None = None):
         if file_object:
             self._add_file(
                 self.tr("Me: {text}").format(text=text),
                 file_object,
                 Qt.AlignmentFlag.AlignRight,
                 "green",
-                timestamp=timestamp,
+                created_at=created_at,
             )
         else:
             self._add_message(
                 self.tr("Me: {text}").format(text=text),
                 Qt.AlignmentFlag.AlignRight,
                 "green",
-                timestamp=timestamp,
+                created_at=created_at,
             )
 
     def add_other(
         self,
-        timestamp: int | float,
+        created_at: datetime,
         text: str = "",
         file_object: FileObject | None = None,
         other_name: str = "Other",
     ):
         if file_object:
             self._add_file(
-                f"{other_name}: {text}", file_object, Qt.AlignmentFlag.AlignLeft, "blue", timestamp=timestamp
+                f"{other_name}: {text}",
+                file_object,
+                Qt.AlignmentFlag.AlignLeft,
+                "blue",
+                created_at=created_at,
             )
         else:
             self._add_message(
-                f"{other_name}: {text}", Qt.AlignmentFlag.AlignLeft, "blue", timestamp=timestamp
+                f"{other_name}: {text}", Qt.AlignmentFlag.AlignLeft, "blue", created_at=created_at
             )
 
 
@@ -336,9 +340,9 @@ if __name__ == "__main__":
             self.chatGui.signal_on_message_send.connect(self.handleMessage)
 
         def handleMessage(self, text):
-            self.chatGui.add_own(int(datetime.datetime.now().timestamp()), text)
+            self.chatGui.add_own(datetime.now(), text)
             # Simulate other party response
-            self.chatGui.add_other(int(datetime.datetime.now().timestamp()), text)
+            self.chatGui.add_other(datetime.now(), text)
 
     if __name__ == "__main__":
         app = QApplication(sys.argv)

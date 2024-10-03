@@ -197,9 +197,9 @@ class RelayList:
 class BaseDM:
     def __init__(
         self,
+        created_at: datetime,
         event: Optional[Event] = None,
         author: Optional[PublicKey] = None,
-        created_at: Optional[Timestamp] = None,
         use_compression=False,
     ) -> None:
         super().__init__()
@@ -216,11 +216,10 @@ class BaseDM:
         return d
 
     def dump(self) -> Dict:
-        d = self.__dict__.copy()
-        del d["use_compression"]
+        d = {}
         d["event"] = self.event.as_json() if self.event else None
         d["author"] = self.author.to_bech32() if self.author else None
-        d["created_at"] = self.created_at.as_secs() if self.created_at else None
+        d["created_at"] = self.created_at.timestamp()
         return self.delete_none_entries(d)
 
     def serialize(self) -> str:
@@ -244,14 +243,17 @@ class BaseDM:
         decoded_dict["author"] = (
             PublicKey.from_bech32(decoded_dict["author"]) if decoded_dict.get("author") else None
         )
-        decoded_dict["created_at"] = (
-            Timestamp.from_secs(decoded_dict["created_at"]) if decoded_dict.get("created_at") else None
-        )
+        try:
+            # in the old format created_at was optional. So i have to catch this.
+            decoded_dict["created_at"] = datetime.fromtimestamp(decoded_dict["created_at"])
+        except:
+            decoded_dict["created_at"] = datetime.now()
+
+        logger.info(f" decoded_dict  {decoded_dict}")
         return cls(**filtered_for_init(decoded_dict, cls))
 
     @classmethod
     def from_serialized(cls, base64_encoded_data: str, network: bdk.Network):
-
         if base64_encoded_data.startswith("{"):
             # if it is likely a json string, try this method first
             try:
@@ -291,10 +293,10 @@ class ProtocolDM(BaseDM):
     def __init__(
         self,
         public_key_bech32: str,
+        created_at: datetime,
         please_trust_public_key_bech32: str | None = None,
         event: Optional[Event] = None,
         author: Optional[PublicKey] = None,
-        created_at: Optional[Timestamp] = None,
         use_compression=False,
     ) -> None:
         super().__init__(event=event, author=author, created_at=created_at, use_compression=use_compression)
@@ -332,12 +334,12 @@ class BitcoinDM(BaseDM):
     def __init__(
         self,
         label: ChatLabel,
+        created_at: datetime,
         description: str,
         data: Data | None = None,
         intended_recipient: str | None = None,
         event: Optional[Event] = None,
         author: Optional[PublicKey] = None,
-        created_at: Optional[Timestamp] = None,
         use_compression=False,
     ) -> None:
         super().__init__(event=event, author=author, created_at=created_at, use_compression=use_compression)
@@ -348,6 +350,7 @@ class BitcoinDM(BaseDM):
 
     def dump(self) -> Dict:
         d = super().dump()
+        d["description"] = self.description
         d["label"] = self.label.value
         d["data"] = self.data.dump() if self.data else None
         return self.delete_none_entries(d)
@@ -356,7 +359,7 @@ class BitcoinDM(BaseDM):
     def from_dump(cls, d: Dict, network: bdk.Network) -> "BitcoinDM":
         d["label"] = ChatLabel.from_value(d.get("label", ChatLabel.GroupChat.value))
         d["data"] = Data.from_dump(d["data"], network=network) if d.get("data") else None
-        return cls(**filtered_for_init(d, cls))
+        return super().from_dump(d, network)
 
     def __eq__(self, other) -> bool:
         if not super().__eq__(other):
@@ -374,12 +377,13 @@ class BitcoinDM(BaseDM):
         return False
 
     def __str__(self) -> str:
+        "Returns relevant data in a human readable form"
         d = {}
         d["label"] = self.label.name
         d["data"] = self.data.data_as_string() if self.data else None
         # d["event"]=str(self.event)
         d["author"] = self.author.to_bech32() if self.author else None
-        d["created_at"] = self.created_at.to_human_datetime() if self.created_at else None
+        d["created_at"] = self.created_at.isoformat()
         d["use_compression"] = self.use_compression
         d["description"] = self.description
         d["intended_recipient"] = str(self.intended_recipient)
@@ -834,7 +838,7 @@ class BaseProtocol(QObject):
 
     def __init__(
         self,
-        keys: Keys,
+        keys: Keys | None = None,
         dm_connection_dump: dict | None = None,
         start_time: datetime | None = None,
     ) -> None:
@@ -891,7 +895,7 @@ class NostrProtocol(BaseProtocol):
     def __init__(
         self,
         network: bdk.Network,
-        keys: Keys,
+        keys: Keys | None = None,
         dm_connection_dump: Dict | None = None,
         start_time: datetime | None = None,
         use_compression=True,
@@ -918,7 +922,10 @@ class NostrProtocol(BaseProtocol):
             logger.debug(f"{author_public_key.to_bech32()} was published already. No need to do it again")
             return
         dm = ProtocolDM(
-            public_key_bech32=author_public_key.to_bech32(), event=None, use_compression=self.use_compression
+            public_key_bech32=author_public_key.to_bech32(),
+            event=None,
+            use_compression=self.use_compression,
+            created_at=datetime.now(),
         )
         self.dm_connection.send(dm, self.dm_connection.async_dm_connection.keys.public_key())
         logger.debug(
@@ -931,6 +938,7 @@ class NostrProtocol(BaseProtocol):
             please_trust_public_key_bech32=recipient_public_key.to_bech32(),
             event=None,
             use_compression=self.use_compression,
+            created_at=datetime.now(),
         )
         self.dm_connection.send(dm, self.dm_connection.async_dm_connection.keys.public_key())
 
@@ -962,7 +970,7 @@ class GroupChat(BaseProtocol):
     def __init__(
         self,
         network: bdk.Network,
-        keys: Keys,
+        keys: Keys | None = None,
         dm_connection_dump: dict | None = None,
         start_time: datetime | None = None,
         members: List[PublicKey] | None = None,
@@ -1047,6 +1055,7 @@ class GroupChat(BaseProtocol):
                     label=ChatLabel.DeleteMeRequest,
                     description="",
                     use_compression=self.use_compression,
+                    created_at=datetime.now(),
                 ),
                 member,
             )
