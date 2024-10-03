@@ -214,8 +214,12 @@ class NostrSync(QObject):
         individual_chats_visible=True,
         use_compression=True,
     ) -> "NostrSync":
-        nostr_protocol = NostrProtocol(network=network, keys=protocol_keys, use_compression=use_compression)
-        group_chat = GroupChat(network=network, keys=device_keys, use_compression=use_compression)
+        nostr_protocol = NostrProtocol(
+            network=network, keys=protocol_keys, use_compression=use_compression, last_shutdown=datetime.now()
+        )
+        group_chat = GroupChat(
+            network=network, keys=device_keys, use_compression=use_compression, last_shutdown=datetime.now()
+        )
         return NostrSync(
             network=network,
             nostr_protocol=nostr_protocol,
@@ -325,14 +329,14 @@ class NostrSync(QObject):
             chat_gui.add_own(
                 text=str(dm),
                 file_object=file_object,
-                timestamp=dm.created_at.as_secs() if dm.created_at else datetime.now().timestamp(),
+                created_at=dm.created_at if dm.created_at else datetime.now(),
             )
         else:
             chat_gui.add_other(
                 text=str(dm),
                 file_object=file_object,
                 other_name=short_key(dm.author.to_bech32()) if dm.author else "Unknown",
-                timestamp=dm.created_at.as_secs() if dm.created_at else datetime.now().timestamp(),
+                created_at=dm.created_at if dm.created_at else datetime.now(),
             )
 
     def add_to_chat(self, dm: BitcoinDM):
@@ -354,14 +358,14 @@ class NostrSync(QObject):
             chat_gui.add_own(
                 text=text,
                 file_object=file_object,
-                timestamp=dm.created_at.as_secs() if dm.created_at else datetime.now().timestamp(),
+                created_at=dm.created_at if dm.created_at else datetime.now(),
             )
         else:
             chat_gui.add_other(
                 text=text,
                 file_object=file_object,
                 other_name=short_key(dm.author.to_bech32()) if dm.author else "Unknown",
-                timestamp=dm.created_at.as_secs() if dm.created_at else datetime.now().timestamp(),
+                created_at=dm.created_at if dm.created_at else datetime.now(),
             )
 
     def get_singlechat_counterparty(self, dm: BitcoinDM) -> Optional[str]:
@@ -390,7 +394,11 @@ class NostrSync(QObject):
     def on_send_message_in_groupchat(self, text: str):
         self.group_chat.send(
             BitcoinDM(
-                label=ChatLabel.GroupChat, description=text, event=None, use_compression=self.use_compression
+                label=ChatLabel.GroupChat,
+                description=text,
+                event=None,
+                use_compression=self.use_compression,
+                created_at=datetime.now(),
             )
         )
 
@@ -405,6 +413,7 @@ class NostrSync(QObject):
             event=None,
             data=bitcoin_data,
             use_compression=self.use_compression,
+            created_at=datetime.now(),
         )
         return dm
 
@@ -469,6 +478,7 @@ class NostrSync(QObject):
                 label=ChatLabel.SingleRecipient,
                 description=text,
                 use_compression=self.use_compression,
+                created_at=datetime.now(),
             )
             receiver = PublicKey.from_bech32(untrusted_device.pub_key_bech32)
             self.group_chat.dm_connection.send(

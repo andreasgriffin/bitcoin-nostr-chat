@@ -197,9 +197,9 @@ class RelayList:
 class BaseDM:
     def __init__(
         self,
+        created_at: datetime,
         event: Optional[Event] = None,
         author: Optional[PublicKey] = None,
-        created_at: Optional[Timestamp] = None,
         use_compression=False,
     ) -> None:
         super().__init__()
@@ -216,11 +216,10 @@ class BaseDM:
         return d
 
     def dump(self) -> Dict:
-        d = self.__dict__.copy()
-        del d["use_compression"]
+        d = {}
         d["event"] = self.event.as_json() if self.event else None
         d["author"] = self.author.to_bech32() if self.author else None
-        d["created_at"] = self.created_at.as_secs() if self.created_at else None
+        d["created_at"] = self.created_at.timestamp()
         return self.delete_none_entries(d)
 
     def serialize(self) -> str:
@@ -244,14 +243,19 @@ class BaseDM:
         decoded_dict["author"] = (
             PublicKey.from_bech32(decoded_dict["author"]) if decoded_dict.get("author") else None
         )
-        decoded_dict["created_at"] = (
-            Timestamp.from_secs(decoded_dict["created_at"]) if decoded_dict.get("created_at") else None
-        )
+        try:
+            # in the old format created_at was optional. So i have to catch this.
+            decoded_dict["created_at"] = datetime.fromtimestamp(decoded_dict["created_at"])
+        except:
+            decoded_dict["created_at"] = datetime.now() - timedelta(
+                days=30
+            )  # assume the legacy format is at least 30 days old
+
+        logger.info(f" decoded_dict  {decoded_dict}")
         return cls(**filtered_for_init(decoded_dict, cls))
 
     @classmethod
     def from_serialized(cls, base64_encoded_data: str, network: bdk.Network):
-
         if base64_encoded_data.startswith("{"):
             # if it is likely a json string, try this method first
             try:
@@ -291,10 +295,10 @@ class ProtocolDM(BaseDM):
     def __init__(
         self,
         public_key_bech32: str,
+        created_at: datetime,
         please_trust_public_key_bech32: str | None = None,
         event: Optional[Event] = None,
         author: Optional[PublicKey] = None,
-        created_at: Optional[Timestamp] = None,
         use_compression=False,
     ) -> None:
         super().__init__(event=event, author=author, created_at=created_at, use_compression=use_compression)
@@ -332,12 +336,12 @@ class BitcoinDM(BaseDM):
     def __init__(
         self,
         label: ChatLabel,
+        created_at: datetime,
         description: str,
-        data: Data = None,
-        intended_recipient: str = None,
+        data: Data | None = None,
+        intended_recipient: str | None = None,
         event: Optional[Event] = None,
         author: Optional[PublicKey] = None,
-        created_at: Optional[Timestamp] = None,
         use_compression=False,
     ) -> None:
         super().__init__(event=event, author=author, created_at=created_at, use_compression=use_compression)
@@ -348,6 +352,7 @@ class BitcoinDM(BaseDM):
 
     def dump(self) -> Dict:
         d = super().dump()
+        d["description"] = self.description
         d["label"] = self.label.value
         d["data"] = self.data.dump() if self.data else None
         return self.delete_none_entries(d)
@@ -356,7 +361,7 @@ class BitcoinDM(BaseDM):
     def from_dump(cls, d: Dict, network: bdk.Network) -> "BitcoinDM":
         d["label"] = ChatLabel.from_value(d.get("label", ChatLabel.GroupChat.value))
         d["data"] = Data.from_dump(d["data"], network=network) if d.get("data") else None
-        return cls(**filtered_for_init(d, cls))
+        return super().from_dump(d, network)
 
     def __eq__(self, other) -> bool:
         if not super().__eq__(other):
@@ -374,12 +379,13 @@ class BitcoinDM(BaseDM):
         return False
 
     def __str__(self) -> str:
+        "Returns relevant data in a human readable form"
         d = {}
         d["label"] = self.label.name
         d["data"] = self.data.data_as_string() if self.data else None
         # d["event"]=str(self.event)
         d["author"] = self.author.to_bech32() if self.author else None
-        d["created_at"] = self.created_at.to_human_datetime() if self.created_at else None
+        d["created_at"] = self.created_at.isoformat()
         d["use_compression"] = self.use_compression
         d["description"] = self.description
         d["intended_recipient"] = str(self.intended_recipient)
@@ -741,9 +747,9 @@ class DmConnection(QObject):
         keys: Keys,
         get_currently_allowed: Callable[[], Set[str]],
         use_timer: bool = False,
-        events: list[Event] = None,
-        relay_list: RelayList = None,
-        async_dm_connection: AsyncDmConnection = None,
+        events: list[Event] | None = None,
+        relay_list: RelayList | None = None,
+        async_dm_connection: AsyncDmConnection | None = None,
     ) -> None:
         super().__init__()
 
@@ -802,7 +808,9 @@ class DmConnection(QObject):
     ):
         return self.async_dm_connection.dump(forbidden_data_types=forbidden_data_types)
 
-    def send(self, dm: BaseDM, receiver: PublicKey, on_done: Callable[[Optional[EventId]], None] = None):
+    def send(
+        self, dm: BaseDM, receiver: PublicKey, on_done: Callable[[Optional[EventId]], None] | None = None
+    ):
         self.async_thread.run_coroutine(self.async_dm_connection.send(dm, receiver), on_done=on_done)
 
     def get_connected_relays(self) -> List[Relay]:
@@ -832,13 +840,14 @@ class BaseProtocol(QObject):
 
     def __init__(
         self,
+        last_shutdown: datetime,
         keys: Keys | None = None,
         dm_connection_dump: dict | None = None,
-        start_time: datetime | None = None,
     ) -> None:
         "Either keys or dm_connection_dump must be given"
         super().__init__()
-        self.start_time = start_time
+        # start_time saves the last shutdown time
+        self.last_shutdown = last_shutdown
 
         self.dm_connection = (
             DmConnection.from_dump(
@@ -871,7 +880,7 @@ class BaseProtocol(QObject):
         self.dm_connection.disconnect()
         self.dm_connection.async_dm_connection.keys = keys
         self.dm_connection.async_dm_connection.relay_list = relay_list
-        self.start_time = None
+        self.last_shutdown = None
         self.dm_connection.refresh_client()
         self.subscribe()
 
@@ -889,14 +898,14 @@ class NostrProtocol(BaseProtocol):
     def __init__(
         self,
         network: bdk.Network,
+        last_shutdown: datetime,
         keys: Keys | None = None,
         dm_connection_dump: Dict | None = None,
-        start_time: datetime | None = None,
         use_compression=True,
     ) -> None:
         "Either keys or dm_connection_dump must be given"
         self.network = network
-        super().__init__(keys=keys, dm_connection_dump=dm_connection_dump, start_time=start_time)
+        super().__init__(keys=keys, dm_connection_dump=dm_connection_dump, last_shutdown=last_shutdown)
         self.use_compression = use_compression
 
     def get_currently_allowed(self) -> Set[str]:
@@ -916,7 +925,10 @@ class NostrProtocol(BaseProtocol):
             logger.debug(f"{author_public_key.to_bech32()} was published already. No need to do it again")
             return
         dm = ProtocolDM(
-            public_key_bech32=author_public_key.to_bech32(), event=None, use_compression=self.use_compression
+            public_key_bech32=author_public_key.to_bech32(),
+            event=None,
+            use_compression=self.use_compression,
+            created_at=datetime.now(),
         )
         self.dm_connection.send(dm, self.dm_connection.async_dm_connection.keys.public_key())
         logger.debug(
@@ -929,6 +941,7 @@ class NostrProtocol(BaseProtocol):
             please_trust_public_key_bech32=recipient_public_key.to_bech32(),
             event=None,
             use_compression=self.use_compression,
+            created_at=datetime.now(),
         )
         self.dm_connection.send(dm, self.dm_connection.async_dm_connection.keys.public_key())
 
@@ -940,8 +953,9 @@ class NostrProtocol(BaseProtocol):
 
     def dump(self):
         return {
+            # start_time saves the last shutdown time
             # the next starttime is the current time
-            "start_time": datetime.now().timestamp(),
+            "last_shutdown": datetime.now().timestamp(),
             "dm_connection_dump": self.dm_connection.dump(),
             "use_compression": self.use_compression,
             "network": self.network.name,
@@ -949,7 +963,10 @@ class NostrProtocol(BaseProtocol):
 
     @classmethod
     def from_dump(cls, d: Dict) -> "NostrProtocol":
-        d["start_time"] = datetime.fromtimestamp(d["start_time"])
+        # start_time saves the last shutdown time
+        d["last_shutdown"] = (
+            datetime.fromtimestamp(d["last_shutdown"]) if "last_shutdown" in d else datetime.now()
+        )
         d["network"] = bdk.Network[d["network"]]
         return cls(**filtered_for_init(d, cls))
 
@@ -960,10 +977,10 @@ class GroupChat(BaseProtocol):
     def __init__(
         self,
         network: bdk.Network,
-        keys: Keys = None,
-        dm_connection_dump: dict = None,
-        start_time: datetime = None,
-        members: List[PublicKey] = None,
+        last_shutdown: datetime,
+        keys: Keys | None = None,
+        dm_connection_dump: dict | None = None,
+        members: List[PublicKey] | None = None,
         use_compression=True,
     ) -> None:
         "Either keys or dm_connection_dump must be given"
@@ -976,7 +993,7 @@ class GroupChat(BaseProtocol):
         super().__init__(
             keys=keys,
             dm_connection_dump=dm_connection_dump,
-            start_time=start_time,
+            last_shutdown=last_shutdown,
         )
 
     def get_currently_allowed(self) -> Set[str]:
@@ -1015,14 +1032,17 @@ class GroupChat(BaseProtocol):
         def on_done(subscription_id: str):
             logger.debug(f"{self.__class__.__name__}  Successfully subscribed to {subscription_id}")
 
-        start_time = self.start_time - self.nip17_time_uncertainty if self.start_time else self.start_time
+        start_time = (
+            self.last_shutdown - self.nip17_time_uncertainty if self.last_shutdown else self.last_shutdown
+        )
         self.dm_connection.subscribe(start_time=start_time, on_done=on_done)
 
     def dump(self):
         forbidden_data_types = [DataType.LabelsBip329]
         return {
-            # the next starttime is the current time
-            "start_time": datetime.now().timestamp(),
+            # start_time saves the last shutdown time
+            # the next start_time is the current time
+            "last_shutdown": datetime.now().timestamp(),
             "dm_connection_dump": self.dm_connection.dump(forbidden_data_types=forbidden_data_types),
             "members": [member.to_bech32() for member in self.members],
             "use_compression": self.use_compression,
@@ -1031,12 +1051,15 @@ class GroupChat(BaseProtocol):
 
     @classmethod
     def from_dump(cls, d: Dict) -> "GroupChat":
-        d["start_time"] = datetime.fromtimestamp(d["start_time"])
+        # start_time saves the last shutdown time
+        d["last_shutdown"] = (
+            datetime.fromtimestamp(d["last_shutdown"]) if "last_shutdown" in d else datetime.now()
+        )
         d["network"] = bdk.Network[d["network"]]
         d["members"] = [PublicKey.from_bech32(pk) for pk in d["members"]]
         return cls(**filtered_for_init(d, cls))
 
-    def renew_own_key(self, keys: Keys = None):
+    def renew_own_key(self, keys: Keys | None = None):
         # send new key to memebers
         for member in self.members:
             self.dm_connection.send(
@@ -1045,6 +1068,7 @@ class GroupChat(BaseProtocol):
                     label=ChatLabel.DeleteMeRequest,
                     description="",
                     use_compression=self.use_compression,
+                    created_at=datetime.now(),
                 ),
                 member,
             )
