@@ -333,8 +333,8 @@ class BitcoinDM(BaseDM):
         self,
         label: ChatLabel,
         description: str,
-        data: Data = None,
-        intended_recipient: str = None,
+        data: Data | None = None,
+        intended_recipient: str | None = None,
         event: Optional[Event] = None,
         author: Optional[PublicKey] = None,
         created_at: Optional[Timestamp] = None,
@@ -741,9 +741,9 @@ class DmConnection(QObject):
         keys: Keys,
         get_currently_allowed: Callable[[], Set[str]],
         use_timer: bool = False,
-        events: list[Event] = None,
-        relay_list: RelayList = None,
-        async_dm_connection: AsyncDmConnection = None,
+        events: list[Event] | None = None,
+        relay_list: RelayList | None = None,
+        async_dm_connection: AsyncDmConnection | None = None,
     ) -> None:
         super().__init__()
 
@@ -802,7 +802,9 @@ class DmConnection(QObject):
     ):
         return self.async_dm_connection.dump(forbidden_data_types=forbidden_data_types)
 
-    def send(self, dm: BaseDM, receiver: PublicKey, on_done: Callable[[Optional[EventId]], None] = None):
+    def send(
+        self, dm: BaseDM, receiver: PublicKey, on_done: Callable[[Optional[EventId]], None] | None = None
+    ):
         self.async_thread.run_coroutine(self.async_dm_connection.send(dm, receiver), on_done=on_done)
 
     def get_connected_relays(self) -> List[Relay]:
@@ -832,7 +834,7 @@ class BaseProtocol(QObject):
 
     def __init__(
         self,
-        keys: Keys | None = None,
+        keys: Keys,
         dm_connection_dump: dict | None = None,
         start_time: datetime | None = None,
     ) -> None:
@@ -889,7 +891,7 @@ class NostrProtocol(BaseProtocol):
     def __init__(
         self,
         network: bdk.Network,
-        keys: Keys | None = None,
+        keys: Keys,
         dm_connection_dump: Dict | None = None,
         start_time: datetime | None = None,
         use_compression=True,
@@ -960,10 +962,10 @@ class GroupChat(BaseProtocol):
     def __init__(
         self,
         network: bdk.Network,
-        keys: Keys = None,
-        dm_connection_dump: dict = None,
-        start_time: datetime = None,
-        members: List[PublicKey] = None,
+        keys: Keys,
+        dm_connection_dump: dict | None = None,
+        start_time: datetime | None = None,
+        members: List[PublicKey] | None = None,
         use_compression=True,
     ) -> None:
         "Either keys or dm_connection_dump must be given"
@@ -1036,7 +1038,7 @@ class GroupChat(BaseProtocol):
         d["members"] = [PublicKey.from_bech32(pk) for pk in d["members"]]
         return cls(**filtered_for_init(d, cls))
 
-    def renew_own_key(self, keys: Keys = None):
+    def renew_own_key(self, keys: Keys | None = None):
         # send new key to memebers
         for member in self.members:
             self.dm_connection.send(

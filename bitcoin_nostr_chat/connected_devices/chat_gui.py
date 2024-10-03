@@ -105,7 +105,7 @@ class MultiLineListView(QWidget):
         self.update()
         self.signal_clear.emit()
 
-    def addItem(self, text: str, timestamp: int, icon=None) -> QStandardItem:
+    def addItem(self, text: str, timestamp: int | float, icon=None) -> QStandardItem:
         """Add an item with the specified text and an optional icon to the list."""
         item = QStandardItem()
         item.setText(text)
@@ -155,7 +155,9 @@ class ChatListWidget(MultiLineListView):
         super().__init__()
         self.itemClicked.connect(self.onItemClicked)
 
-    def add_file(self, fileObject: FileObject, timestamp: int, icon_path: str | None = None) -> QStandardItem:
+    def add_file(
+        self, fileObject: FileObject, timestamp: int | float, icon_path: str | None = None
+    ) -> QStandardItem:
         current_file_directory = os.path.dirname(os.path.abspath(__file__))
         icon_path = icon_path if icon_path else os.path.join(current_file_directory, "clip.svg")
 
@@ -268,20 +270,25 @@ class ChatGui(QWidget):
         self.textInput.clear()
         # self.add_own(text)
 
-    def _add_message(self, text: str, alignment: Qt.AlignmentFlag, color: str, timestamp: int):
+    def _add_message(self, text: str, alignment: Qt.AlignmentFlag, color: str, timestamp: int | float):
         item = self.chat_list_display.addItem(text, timestamp=timestamp)
         item.setTextAlignment(alignment)
         item.setForeground(QBrush(QColor(color)))
 
     def _add_file(
-        self, text: str, file_object: FileObject, alignment: Qt.AlignmentFlag, color: str, timestamp: int
+        self,
+        text: str,
+        file_object: FileObject,
+        alignment: Qt.AlignmentFlag,
+        color: str,
+        timestamp: int | float,
     ):
         item = self.chat_list_display.add_file(file_object, timestamp=timestamp)
         item.setTextAlignment(alignment)
         item.setForeground(QBrush(QColor(color)))
         item.setText(text)
 
-    def add_own(self, timestamp: int, text: str = "", file_object: FileObject | None = None):
+    def add_own(self, timestamp: int | float, text: str = "", file_object: FileObject | None = None):
         if file_object:
             self._add_file(
                 self.tr("Me: {text}").format(text=text),
@@ -299,7 +306,11 @@ class ChatGui(QWidget):
             )
 
     def add_other(
-        self, timestamp: int, text: str = "", file_object: FileObject | None = None, other_name: str = "Other"
+        self,
+        timestamp: int | float,
+        text: str = "",
+        file_object: FileObject | None = None,
+        other_name: str = "Other",
     ):
         if file_object:
             self._add_file(
