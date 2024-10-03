@@ -214,8 +214,12 @@ class NostrSync(QObject):
         individual_chats_visible=True,
         use_compression=True,
     ) -> "NostrSync":
-        nostr_protocol = NostrProtocol(network=network, keys=protocol_keys, use_compression=use_compression)
-        group_chat = GroupChat(network=network, keys=device_keys, use_compression=use_compression)
+        nostr_protocol = NostrProtocol(
+            network=network, keys=protocol_keys, use_compression=use_compression, last_shutdown=datetime.now()
+        )
+        group_chat = GroupChat(
+            network=network, keys=device_keys, use_compression=use_compression, last_shutdown=datetime.now()
+        )
         return NostrSync(
             network=network,
             nostr_protocol=nostr_protocol,

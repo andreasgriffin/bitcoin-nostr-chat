@@ -247,7 +247,9 @@ class BaseDM:
             # in the old format created_at was optional. So i have to catch this.
             decoded_dict["created_at"] = datetime.fromtimestamp(decoded_dict["created_at"])
         except:
-            decoded_dict["created_at"] = datetime.now()
+            decoded_dict["created_at"] = datetime.now() - timedelta(
+                days=30
+            )  # assume the legacy format is at least 30 days old
 
         logger.info(f" decoded_dict  {decoded_dict}")
         return cls(**filtered_for_init(decoded_dict, cls))
@@ -838,13 +840,14 @@ class BaseProtocol(QObject):
 
     def __init__(
         self,
+        last_shutdown: datetime,
         keys: Keys | None = None,
         dm_connection_dump: dict | None = None,
-        start_time: datetime | None = None,
     ) -> None:
         "Either keys or dm_connection_dump must be given"
         super().__init__()
-        self.start_time = start_time
+        # start_time saves the last shutdown time
+        self.last_shutdown = last_shutdown
 
         self.dm_connection = (
             DmConnection.from_dump(
@@ -877,7 +880,7 @@ class BaseProtocol(QObject):
         self.dm_connection.disconnect()
         self.dm_connection.async_dm_connection.keys = keys
         self.dm_connection.async_dm_connection.relay_list = relay_list
-        self.start_time = None
+        self.last_shutdown = None
         self.dm_connection.refresh_client()
         self.subscribe()
 
@@ -895,14 +898,14 @@ class NostrProtocol(BaseProtocol):
     def __init__(
         self,
         network: bdk.Network,
+        last_shutdown: datetime,
         keys: Keys | None = None,
         dm_connection_dump: Dict | None = None,
-        start_time: datetime | None = None,
         use_compression=True,
     ) -> None:
         "Either keys or dm_connection_dump must be given"
         self.network = network
-        super().__init__(keys=keys, dm_connection_dump=dm_connection_dump, start_time=start_time)
+        super().__init__(keys=keys, dm_connection_dump=dm_connection_dump, last_shutdown=last_shutdown)
         self.use_compression = use_compression
 
     def get_currently_allowed(self) -> Set[str]:
@@ -950,8 +953,9 @@ class NostrProtocol(BaseProtocol):
 
     def dump(self):
         return {
+            # start_time saves the last shutdown time
             # the next starttime is the current time
-            "start_time": datetime.now().timestamp(),
+            "last_shutdown": datetime.now().timestamp(),
             "dm_connection_dump": self.dm_connection.dump(),
             "use_compression": self.use_compression,
             "network": self.network.name,
@@ -959,7 +963,10 @@ class NostrProtocol(BaseProtocol):
 
     @classmethod
     def from_dump(cls, d: Dict) -> "NostrProtocol":
-        d["start_time"] = datetime.fromtimestamp(d["start_time"])
+        # start_time saves the last shutdown time
+        d["last_shutdown"] = (
+            datetime.fromtimestamp(d["last_shutdown"]) if "last_shutdown" in d else datetime.now()
+        )
         d["network"] = bdk.Network[d["network"]]
         return cls(**filtered_for_init(d, cls))
 
@@ -970,9 +977,9 @@ class GroupChat(BaseProtocol):
     def __init__(
         self,
         network: bdk.Network,
+        last_shutdown: datetime,
         keys: Keys | None = None,
         dm_connection_dump: dict | None = None,
-        start_time: datetime | None = None,
         members: List[PublicKey] | None = None,
         use_compression=True,
     ) -> None:
@@ -986,7 +993,7 @@ class GroupChat(BaseProtocol):
         super().__init__(
             keys=keys,
             dm_connection_dump=dm_connection_dump,
-            start_time=start_time,
+            last_shutdown=last_shutdown,
         )
 
     def get_currently_allowed(self) -> Set[str]:
@@ -1025,14 +1032,17 @@ class GroupChat(BaseProtocol):
         def on_done(subscription_id: str):
             logger.debug(f"{self.__class__.__name__}  Successfully subscribed to {subscription_id}")
 
-        start_time = self.start_time - self.nip17_time_uncertainty if self.start_time else self.start_time
+        start_time = (
+            self.last_shutdown - self.nip17_time_uncertainty if self.last_shutdown else self.last_shutdown
+        )
         self.dm_connection.subscribe(start_time=start_time, on_done=on_done)
 
     def dump(self):
         forbidden_data_types = [DataType.LabelsBip329]
         return {
-            # the next starttime is the current time
-            "start_time": datetime.now().timestamp(),
+            # start_time saves the last shutdown time
+            # the next start_time is the current time
+            "last_shutdown": datetime.now().timestamp(),
             "dm_connection_dump": self.dm_connection.dump(forbidden_data_types=forbidden_data_types),
             "members": [member.to_bech32() for member in self.members],
             "use_compression": self.use_compression,
@@ -1041,7 +1051,10 @@ class GroupChat(BaseProtocol):
 
     @classmethod
     def from_dump(cls, d: Dict) -> "GroupChat":
-        d["start_time"] = datetime.fromtimestamp(d["start_time"])
+        # start_time saves the last shutdown time
+        d["last_shutdown"] = (
+            datetime.fromtimestamp(d["last_shutdown"]) if "last_shutdown" in d else datetime.now()
+        )
         d["network"] = bdk.Network[d["network"]]
         d["members"] = [PublicKey.from_bech32(pk) for pk in d["members"]]
         return cls(**filtered_for_init(d, cls))
