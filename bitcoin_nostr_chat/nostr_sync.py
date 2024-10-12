@@ -30,6 +30,7 @@
 import logging
 from datetime import datetime
 
+from bitcoin_nostr_chat import DEFAULT_USE_COMPRESSION
 from bitcoin_nostr_chat.dialogs import SecretKeyDialog, create_custom_message_box
 from bitcoin_nostr_chat.utils import filtered_for_init
 
@@ -105,10 +106,11 @@ class NostrSync(QObject):
         signals_min: SignalsMin,
         individual_chats_visible=True,
         hide_data_types_in_chat: tuple[DataType] = (DataType.LabelsBip329,),
-        use_compression=True,
+        use_compression=DEFAULT_USE_COMPRESSION,
         debug=False,
+        parent: QObject | None = None,
     ) -> None:
-        super().__init__()
+        super().__init__(parent=parent)
         self.network = network
         self.debug = debug
         self.nostr_protocol = nostr_protocol
@@ -140,6 +142,11 @@ class NostrSync(QObject):
         self.gui.groupchat_gui.chat_list_display.signal_clear.connect(
             lambda: self.on_clear_chat_from_memory(chat_label=ChatLabel.GroupChat)
         )
+        self.gui.signal_close_event.connect(self.stop)
+
+    def stop(self):
+        self.nostr_protocol.dm_connection.stop()
+        self.group_chat.dm_connection.stop()
 
     def get_connected_relays(self) -> RelayList:
         return RelayList(
@@ -212,13 +219,22 @@ class NostrSync(QObject):
         device_keys: Keys,
         signals_min: SignalsMin,
         individual_chats_visible=True,
-        use_compression=True,
+        use_compression=DEFAULT_USE_COMPRESSION,
+        parent: QObject | None = None,
     ) -> "NostrSync":
         nostr_protocol = NostrProtocol(
-            network=network, keys=protocol_keys, use_compression=use_compression, last_shutdown=datetime.now()
+            network=network,
+            keys=protocol_keys,
+            use_compression=use_compression,
+            last_shutdown=datetime.now(),
+            parent=parent,
         )
         group_chat = GroupChat(
-            network=network, keys=device_keys, use_compression=use_compression, last_shutdown=datetime.now()
+            network=network,
+            keys=device_keys,
+            use_compression=use_compression,
+            last_shutdown=datetime.now(),
+            parent=parent,
         )
         return NostrSync(
             network=network,
@@ -227,6 +243,7 @@ class NostrSync(QObject):
             individual_chats_visible=individual_chats_visible,
             signals_min=signals_min,
             use_compression=use_compression,
+            parent=parent,
         )
 
     def dump(self) -> Dict[str, Any]:
@@ -241,15 +258,17 @@ class NostrSync(QObject):
         return d
 
     @classmethod
-    def from_dump(cls, d: Dict[str, Any], signals_min: SignalsMin) -> "NostrSync":
+    def from_dump(
+        cls,
+        d: Dict[str, Any],
+        signals_min: SignalsMin,
+        parent: QObject | None = None,
+    ) -> "NostrSync":
         d["nostr_protocol"] = NostrProtocol.from_dump(d["nostr_protocol"])
         d["group_chat"] = GroupChat.from_dump(d["group_chat"])
         d["network"] = bdk.Network[d["network"]]
 
-        sync = cls(
-            **filtered_for_init(d, NostrSync),
-            signals_min=signals_min,
-        )
+        sync = cls(**filtered_for_init(d, NostrSync), signals_min=signals_min, parent=parent)
 
         # add the gui elements for the trusted members
         for member in sync.group_chat.members:

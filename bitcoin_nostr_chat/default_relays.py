@@ -1,7 +1,21 @@
 from typing import List
 
 
-def default_delays() -> List[str]:
+def get_preferred_relays() -> List[str]:
+    return [
+        "wss://atlas.nostr.land/",
+        "wss://eden.nostr.land/",
+        "wss://relay.nostr.nu/",
+        "wss://nostr.noones.com/",
+        "wss://nostr.roundrockbitcoiners.com/",
+        "wss://relay.roli.social/",
+        "wss://relay.orange-crush.com/",
+        "wss://nostr.bitcoiner.social/",
+        "wss://relay.snort.social/",
+    ]
+
+
+def get_default_delays() -> List[str]:
     return [
         "wss://relay.damus.io",
         "wss://nostr.mom",

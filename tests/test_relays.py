@@ -1,10 +1,10 @@
 import pytest
 import websocket
 
-from bitcoin_nostr_chat.nostr import RelayList
+from bitcoin_nostr_chat.default_relays import get_preferred_relays
 
 
-@pytest.mark.parametrize("url", RelayList.preferred_relays())
+@pytest.mark.parametrize("url", get_preferred_relays())
 def test_preferred_relays(url):
     """Test each relay to ensure WebSocket connection is established."""
     try:

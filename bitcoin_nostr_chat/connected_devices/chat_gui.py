@@ -158,12 +158,11 @@ class ChatListWidget(MultiLineListView):
     def add_file(
         self, fileObject: FileObject, created_at: datetime, icon_path: str | None = None
     ) -> QStandardItem:
-        current_file_directory = os.path.dirname(os.path.abspath(__file__))
-        icon_path = icon_path if icon_path else os.path.join(current_file_directory, "clip.svg")
+        icon = QIcon(icon_path) if icon_path else read_QIcon("clip.svg")
 
         item = self.addItem(
             os.path.basename(fileObject.path),
-            icon=QIcon(icon_path) if icon_path else None,
+            icon=icon,
             created_at=created_at,
         )
         item.setData(fileObject, role=self.ROLE_DATA)

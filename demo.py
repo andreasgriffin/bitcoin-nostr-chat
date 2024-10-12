@@ -1,5 +1,7 @@
 import logging
 
+from bitcoin_nostr_chat import DEFAULT_USE_COMPRESSION
+
 logging.basicConfig(level=logging.DEBUG)
 import argparse
 import hashlib
@@ -63,7 +65,7 @@ class DemoApp(QMainWindow):
         file_name,
         signals_min: SignalsMin,
         protcol_secret_str: str = str(uuid4()),
-        use_compression=True,
+        use_compression=DEFAULT_USE_COMPRESSION,
     ):
         super().__init__()
         self.file_name = file_name
