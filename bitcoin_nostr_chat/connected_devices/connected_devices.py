@@ -352,6 +352,7 @@ class ConnectedDevices(QtWidgets.QWidget):
     signal_set_keys = QtCore.pyqtSignal()
     signal_reset_keys = QtCore.pyqtSignal()
     signal_set_relays = QtCore.pyqtSignal(RelayList)
+    signal_close_event = QtCore.pyqtSignal()
 
     def __init__(
         self,
@@ -422,7 +423,7 @@ class ConnectedDevices(QtWidgets.QWidget):
         msg.setIcon(QMessageBox.Icon.Information)
         msg.setText(
             self.tr(
-                "Your sync key is:\n\n{sync_key}\n\n You can import it into any nostr client that supports NIP-17."
+                "Your sync key is:\n\n{sync_key}\n\n Save it, and when you click 'import sync key', it should restore your labels from the nostr relays."
             ).format(sync_key=self.my_keys.secret_key().to_bech32())
         )
         msg.setWindowTitle(self.tr("Sync key Export"))
@@ -529,3 +530,7 @@ class ConnectedDevices(QtWidgets.QWidget):
         )
         self.add_untrusted_device(untrusted_device)
         return untrusted_device
+
+    def closeEvent(self, event):
+        self.signal_close_event.emit()
+        super().closeEvent(event)
