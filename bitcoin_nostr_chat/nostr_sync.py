@@ -29,7 +29,7 @@
 
 import logging
 from collections import deque
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from bitcoin_nostr_chat import DEFAULT_USE_COMPRESSION
 from bitcoin_nostr_chat.connected_devices.util import short_key
@@ -224,14 +224,14 @@ class NostrSync(QObject):
             network=network,
             keys=protocol_keys,
             use_compression=use_compression,
-            sync_start=datetime.now() - timedelta(days=1000),
+            sync_start=None,
             parent=parent,
         )
         group_chat = GroupChat(
             network=network,
             keys=device_keys,
             use_compression=use_compression,
-            sync_start=datetime(2009, 1, 3),
+            sync_start=None,
             parent=parent,
         )
         return NostrSync(
