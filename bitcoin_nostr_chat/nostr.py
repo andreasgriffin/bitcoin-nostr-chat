@@ -941,7 +941,7 @@ class BaseProtocol(QObject):
 
     def __init__(
         self,
-        sync_start: datetime,
+        sync_start: datetime | None,
         network: bdk.Network,
         keys: Keys | None = None,
         dm_connection_dump: dict | None = None,
@@ -1007,7 +1007,7 @@ class NostrProtocol(BaseProtocol):
     def __init__(
         self,
         network: bdk.Network,
-        sync_start: datetime,
+        sync_start: datetime | None,
         keys: Keys | None = None,
         dm_connection_dump: Dict | None = None,
         use_compression=DEFAULT_USE_COMPRESSION,
@@ -1064,13 +1064,13 @@ class NostrProtocol(BaseProtocol):
         def on_done(subscription_id: str):
             logger.debug(f"{self.__class__.__name__}  Successfully subscribed to {subscription_id}")
 
-        self.dm_connection.subscribe(start_time=None, on_done=on_done)
+        self.dm_connection.subscribe(start_time=self.sync_start, on_done=on_done)
 
     def dump(self):
         return {
             # start_time saves the last shutdown time
             # the next starttime is the current time
-            "sync_start": datetime.now().timestamp(),
+            "sync_start": None,  # the nostr protocol should always sync everything  #  datetime.now().timestamp(),
             "dm_connection_dump": self.dm_connection.dump(),
             "use_compression": self.use_compression,
             "network": self.network.name,
@@ -1079,7 +1079,9 @@ class NostrProtocol(BaseProtocol):
     @classmethod
     def from_dump(cls, d: Dict) -> "NostrProtocol":
         # start_time saves the last shutdown time
-        d["sync_start"] = datetime.fromtimestamp(d["sync_start"]) if "sync_start" in d else datetime.now()
+        d["sync_start"] = (
+            datetime.fromtimestamp(d["sync_start"]) if ("sync_start" in d) and d["sync_start"] else None
+        )
         d["network"] = bdk.Network[d["network"]]
         return cls(**filtered_for_init(d, cls))
 
@@ -1090,7 +1092,7 @@ class GroupChat(BaseProtocol):
     def __init__(
         self,
         network: bdk.Network,
-        sync_start: datetime,
+        sync_start: datetime | None,
         keys: Keys | None = None,
         dm_connection_dump: dict | None = None,
         members: List[PublicKey] | None = None,
@@ -1165,7 +1167,9 @@ class GroupChat(BaseProtocol):
     @classmethod
     def from_dump(cls, d: Dict) -> "GroupChat":
         # start_time saves the last shutdown time
-        d["sync_start"] = datetime.fromtimestamp(d["sync_start"]) if "sync_start" in d else datetime.now()
+        d["sync_start"] = (
+            datetime.fromtimestamp(d["sync_start"]) if ("sync_start" in d) and d["sync_start"] else None
+        )
         d["network"] = bdk.Network[d["network"]]
         d["members"] = [PublicKey.from_bech32(pk) for pk in d["members"]]
         return cls(**filtered_for_init(d, cls))
