@@ -28,13 +28,44 @@
 
 
 import logging
+from datetime import datetime
+
+from bitcoin_nostr_chat.connected_devices.chat_gui import ChatGui, FileObject
+from bitcoin_nostr_chat.connected_devices.util import short_key
+from bitcoin_nostr_chat.nostr import BitcoinDM
+from bitcoin_nostr_chat.signals_min import SignalsMin
+
+from ..signals_min import SignalsMin
 
 logger = logging.getLogger(__name__)
 
-from PyQt6.QtCore import QObject, QThread, pyqtSignal
+from collections import deque
 
 
-class SignalsMin(QObject):
-    language_switch = pyqtSignal()
-    signal_add_threat = pyqtSignal(QThread)
-    signal_stop_threat = pyqtSignal(QThread)
+class BitcoinDmChatGui(ChatGui):
+    def __init__(self, signals_min: SignalsMin):
+        super().__init__(signals_min)
+        self.dms: deque[BitcoinDM] = deque(maxlen=10000)
+
+    def add_dm(self, dm: BitcoinDM, is_me: bool):
+        if not dm.author:
+            return
+
+        text = dm.description
+        file_object = FileObject(path=dm.description, data=dm.data) if dm.data else None
+
+        if is_me:
+            self.add_own(
+                text=text,
+                file_object=file_object,
+                created_at=dm.created_at if dm.created_at else datetime.now(),
+            )
+        else:
+            self.add_other(
+                text=text,
+                file_object=file_object,
+                other_name=short_key(dm.author.to_bech32()) if dm.author else "Unknown",
+                created_at=dm.created_at if dm.created_at else datetime.now(),
+            )
+
+        self.dms.append(dm)

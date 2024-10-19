@@ -6,7 +6,7 @@ logging.basicConfig(level=logging.DEBUG)
 import argparse
 import hashlib
 import json
-from typing import Dict
+from typing import Dict, Optional
 from uuid import uuid4
 
 import bdkpython as bdk
@@ -90,10 +90,10 @@ class DemoApp(QMainWindow):
         self.setCentralWidget(self.nostr_sync.gui)
         self.setWindowTitle("Demo App")
 
-    def closeEvent(self, event: QCloseEvent | None) -> None:
+    def closeEvent(self, event: Optional[QCloseEvent]) -> None:
         save_dict_to_file(self.nostr_sync.dump(), self.file_name)
-        if event:
-            event.accept()  # Proceed to close the application
+        self.nostr_sync.stop()
+        super().closeEvent(event)
 
 
 def parse_args():
