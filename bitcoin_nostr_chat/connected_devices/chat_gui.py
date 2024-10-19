@@ -28,9 +28,11 @@
 
 
 import logging
+from collections import deque
 from datetime import datetime
 
 from bitcoin_nostr_chat.connected_devices.util import read_QIcon
+from bitcoin_nostr_chat.signals_min import SignalsMin
 
 from ..signals_min import SignalsMin
 
@@ -64,7 +66,7 @@ from PyQt6.QtWidgets import (
 
 
 class MultiLineListView(QWidget):
-    signal_clear = pyqtSignal()
+    signal_clear = pyqtSignal(deque)
 
     ROLE_SORT = 1001
     itemClicked = pyqtSignal(QStandardItemModel)

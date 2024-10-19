@@ -16,3 +16,7 @@ def read_QIcon(icon_basename: str) -> QIcon:
     if not icon_basename:
         return QIcon()
     return QIcon(icon_path(icon_basename))
+
+
+def short_key(pub_key_bech32: str):
+    return f"{pub_key_bech32[:12]}"

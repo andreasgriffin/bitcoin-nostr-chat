@@ -30,9 +30,9 @@
 import asyncio
 import json
 import logging
+import threading
 from abc import abstractmethod
 from datetime import datetime, timedelta
-from time import sleep
 
 from nostr_sdk import (
     Client,
@@ -60,7 +60,7 @@ import enum
 import zlib
 from collections import deque
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, Iterable, List, Optional, Set
 
 import bdkpython as bdk
 import cbor2
@@ -169,7 +169,7 @@ class RelayList:
         return preferred_relays + [r for r in relays if r not in preferred_relays]
 
     @classmethod
-    def get_relays(cls, nips: List[int] = [17, 4]) -> List[str]:
+    def get_relays_from_nostr_watch(cls, nips: List[int] = [17, 4]) -> List[str]:
         all_relays: List[str] = []
         for nip in nips:
             url = f"https://api.nostr.watch/v1/nip/{nip}"
@@ -178,8 +178,14 @@ class RelayList:
             if result:
                 all_relays += result
 
-        if all_relays:
-            return cls._postprocess_relays(all_relays)
+        return all_relays
+
+    @classmethod
+    def get_relays(cls, nips: List[int] = [17, 4]) -> List[str]:
+        # nostr.watch is not working currently
+        # all_relays =  cls.get_relays_from_nostr_watch(nips=nips)
+        # if all_relays:
+        #     return cls._postprocess_relays(all_relays)
 
         logger.debug(f"Return default list")
         return cls._postprocess_relays(get_default_delays())
@@ -350,9 +356,10 @@ class BitcoinDM(BaseDM):
 
     def dump(self) -> Dict:
         d = super().dump()
-        d["description"] = self.description
         d["label"] = self.label.value
+        d["description"] = self.description
         d["data"] = self.data.dump() if self.data else None
+        d["intended_recipient"] = self.intended_recipient
         return self.delete_none_entries(d)
 
     @classmethod
@@ -390,21 +397,34 @@ class BitcoinDM(BaseDM):
         return json.dumps(d, indent=2)
 
 
+class PrintHandler(HandleNotification):
+    def __init__(self, name) -> None:
+        super().__init__()
+        self.name = name
+
+    async def handle(self, relay_url, subscription_id, event: Event):
+        logger.debug(
+            f"{self.name}: Received new {event.kind().as_enum()} event from {relay_url}:   {event.as_json()}"
+        )
+
+
 class NotificationHandler(HandleNotification):
     def __init__(
         self,
         my_keys: Keys,
         get_currently_allowed: Callable[[], set[str]],
-        queue: deque,
+        processed_dms: deque[BaseDM],
         signal_dm: pyqtBoundSignal,
         from_serialized: Callable[[str], BaseDM],
     ) -> None:
         super().__init__()
-        self.queue = queue
+        self.processed_dms: deque[BaseDM] = processed_dms
+        self.untrusted_events: deque[Event] = deque(maxlen=10000)
         self.get_currently_allowed = get_currently_allowed
         self.my_keys = my_keys
         self.signal_dm = signal_dm
         self.from_serialized = from_serialized
+        signal_dm.connect(self.on_signal_dm)
 
     def is_allowed_message(self, recipient_public_key: PublicKey, author: PublicKey) -> bool:
         logger.debug(f"recipient_public_key = {recipient_public_key.to_bech32()}   ")
@@ -446,6 +466,7 @@ class NotificationHandler(HandleNotification):
 
                 recipient_public_key = event.public_keys()[0]
                 if not self.is_allowed_message(author=sender, recipient_public_key=recipient_public_key):
+                    self.untrusted_events.append(event)
                     return
 
                 logger.debug(f"unwrapped_gift {unwrapped_gift} sender={sender}")
@@ -469,6 +490,7 @@ class NotificationHandler(HandleNotification):
             return
 
         if not self.is_allowed_message(recipient_public_key=recipient_public_key, author=event.author()):
+            self.untrusted_events.append(event)
             return
 
         base64_encoded_data = nip04_decrypt(self.my_keys.secret_key(), event.author(), event.content())
@@ -476,24 +498,25 @@ class NotificationHandler(HandleNotification):
         self.handle_trusted_dm_for_me(event, event.author(), base64_encoded_data)
 
     def handle_trusted_dm_for_me(self, event: Event, author: PublicKey, base64_encoded_data: str):
-
-        nostr_dm = self.from_serialized(base64_encoded_data)
+        nostr_dm: BaseDM = self.from_serialized(base64_encoded_data)
         nostr_dm.event = event
         nostr_dm.author = author
 
-        if self.dm_is_alreay_in_queue(nostr_dm):
-            logger.debug(f"This nostr dm is already in the queue")
+        if self.dm_is_alreay_processed(nostr_dm):
+            logger.debug(f"This nostr dm is already in the processed_dms")
             return
 
-        self.queue.append(nostr_dm)
         self.signal_dm.emit(nostr_dm)
 
         logger.debug(f"Processed dm: {nostr_dm}")
 
-    def dm_is_alreay_in_queue(self, dm: BaseDM) -> bool:
-        for item in list(self.queue):
+    def on_signal_dm(self, dm: BaseDM):
+        self.processed_dms.append(dm)
+
+    def dm_is_alreay_processed(self, dm: BaseDM) -> bool:
+        for item in list(self.processed_dms):
             if not isinstance(item, BaseDM):
-                continue
+                continue  # type: ignore
             if item == dm:
                 return True
         return False
@@ -501,6 +524,16 @@ class NotificationHandler(HandleNotification):
     async def handle_msg(self, relay_url: str, msg: RelayMessage):
         # logger.debug(f"handle_msg {relay_url}: {msg}")
         pass
+
+    async def replay_events(
+        self, events: Iterable[Event], relay_url="from_storage", subscription_id="replay"
+    ):
+        # now handle the dms_from_dump as if they came from a relay
+        for event in events:
+            await self.handle(relay_url=relay_url, event=event, subscription_id=subscription_id)
+
+    async def replay_untrusted_events(self):
+        await self.replay_events([event for event in self.untrusted_events])
 
 
 class AsyncDmConnection(QObject):
@@ -511,7 +544,7 @@ class AsyncDmConnection(QObject):
         keys: Keys,
         get_currently_allowed: Callable[[], Set[str]],
         use_timer: bool = False,
-        events: list[Event] | None = None,
+        dms_from_dump: Iterable[BaseDM] | None = None,
         relay_list: RelayList | None = None,
     ) -> None:
         super().__init__()
@@ -525,15 +558,21 @@ class AsyncDmConnection(QObject):
 
         self.keys: Keys = keys
 
-        # self.queue stores received events and is also used for self.dump
-        self.queue: deque[BaseDM] = deque(maxlen=10000)
-        # self.events is used for replaying events from dump
-        self.events: list[Event] = events if events else []
+        # self.dms_from_dump is used for replaying events from dump
+        self.dms_from_dump: deque[BaseDM] = deque(dms_from_dump) if dms_from_dump else deque()
         self.current_subscription_dict: Dict[str, PublicKey] = {}  # subscription_id: PublicKey
         self.timer = QTimer()
 
         signer = NostrSigner.keys(self.keys)
         self.client = Client(signer)
+
+        self.notification_handler = NotificationHandler(
+            my_keys=self.keys,
+            processed_dms=deque(),  # do  not set here the dms_from_dump, otherwise the replaying messages are all ignored
+            signal_dm=self.signal_dm,
+            get_currently_allowed=self.get_currently_allowed,
+            from_serialized=self.from_serialized,
+        )
 
     async def init_client(self):
         return await self.refresh_client()
@@ -551,7 +590,7 @@ class AsyncDmConnection(QObject):
 
         self.notification_handler = NotificationHandler(
             my_keys=self.keys,
-            queue=self.queue,
+            processed_dms=self.notification_handler.processed_dms,
             signal_dm=self.signal_dm,
             get_currently_allowed=self.get_currently_allowed,
             from_serialized=self.from_serialized,
@@ -559,7 +598,7 @@ class AsyncDmConnection(QObject):
         await self.client.handle_notifications(self.notification_handler)
 
     def public_key_was_published(self, public_key: PublicKey) -> bool:
-        for dm in list(self.queue):
+        for dm in list(self.notification_handler.processed_dms):
             if isinstance(dm, ProtocolDM):
                 if dm.public_key_bech32 == public_key.to_bech32():
                     return True
@@ -629,8 +668,11 @@ class AsyncDmConnection(QObject):
         if self.timer.isActive():
             return
         self.timer.setInterval(delay_retry_connect * 1000)
-        self.timer.timeout.connect(self.ensure_connected)
+        self.timer.timeout.connect(self._timer_ensure_connected)
         self.timer.start()
+
+    def _timer_ensure_connected(self):
+        asyncio.create_task(self.ensure_connected())
 
     async def ensure_connected(self):
         if len(await self.get_connected_relays()) >= min(
@@ -674,7 +716,14 @@ class AsyncDmConnection(QObject):
         return {
             "use_timer": self.use_timer,
             "keys": self.keys.secret_key().to_bech32(),
-            "events": [item.event.as_json() for item in self.queue if item.event and include_item(item)],
+            "dms_from_dump": [
+                item.dump() for item in self.notification_handler.processed_dms if item and include_item(item)
+            ],
+            # TODO: This might be added in the future,
+            # to allow restoring labels from devices that are connected after the wallet has been shut down
+            # "untrusted_events": [
+            #     item.dump() for item in self.notification_handler.untrusted_events if item and include_item(item)
+            # ],
             "relay_list": self.relay_list.dump(),
         }
 
@@ -685,10 +734,11 @@ class AsyncDmConnection(QObject):
         signal_dm: pyqtBoundSignal,
         from_serialized: Callable[[str], BaseDM],
         get_currently_allowed: Callable[[], Set[str]],
+        network: bdk.Network,
     ) -> "AsyncDmConnection":
         d["keys"] = Keys(secret_key=SecretKey.from_bech32(d["keys"]))
 
-        d["events"] = [Event.from_json(json_item) for json_item in d["events"]]
+        d["dms_from_dump"] = [BitcoinDM.from_dump(d, network=network) for d in d.get("dms_from_dump", [])]
         d["relay_list"] = RelayList.from_dump(d["relay_list"]) if "relay_list" in d else None
 
         return cls(
@@ -698,12 +748,9 @@ class AsyncDmConnection(QObject):
             get_currently_allowed=get_currently_allowed,
         )
 
-    async def replay_events(self):
-        # now handle the events as if they came from a relay
-        for event in self.events:
-            await self.notification_handler.handle(
-                relay_url="from_storage", event=event, subscription_id="replay"
-            )
+    async def replay_events_from_dump(self):
+        # now handle the dms_from_dump as if they came from a relay
+        await self.notification_handler.replay_events([dm.event for dm in self.dms_from_dump if dm.event])
 
 
 class AsyncThread(QThread):
@@ -713,10 +760,20 @@ class AsyncThread(QThread):
         super().__init__(parent=parent)
         self.loop = asyncio.new_event_loop()
         # Do not set the event loop globally here
+        self.loop_started = threading.Event()  # Synchronization event
+
+        self.start()
+
+    def start(self, priority: QThread.Priority = QThread.Priority.NormalPriority) -> None:
+        super().start(priority=priority)
+        # Wait until the event loop is confirmed running,
+        # otherwise self.run_coroutine calls will fail
+        self.loop_started.wait()
 
     def run(self):
         # Set the event loop for this thread
         asyncio.set_event_loop(self.loop)
+        self.loop_started.set()  # Set the event to indicate the loop is ready
         try:
             self.loop.run_forever()
         finally:
@@ -779,7 +836,7 @@ class DmConnection(QObject):
         keys: Keys,
         get_currently_allowed: Callable[[], Set[str]],
         use_timer: bool = False,
-        events: list[Event] | None = None,
+        dms_from_dump: deque[BitcoinDM] | None = None,
         relay_list: RelayList | None = None,
         async_dm_connection: AsyncDmConnection | None = None,
         parent: QObject | None = None,
@@ -794,7 +851,6 @@ class DmConnection(QObject):
                 else (logger.debug(f"Finished {callback} with result {result}" if result else None))
             )
         )
-        self.async_thread.start()
 
         self.async_dm_connection = (
             async_dm_connection
@@ -804,7 +860,7 @@ class DmConnection(QObject):
                 from_serialized=from_serialized,
                 keys=keys,
                 use_timer=use_timer,
-                events=events,
+                dms_from_dump=dms_from_dump,
                 get_currently_allowed=get_currently_allowed,
                 relay_list=relay_list,
             )
@@ -819,6 +875,7 @@ class DmConnection(QObject):
         signal_dm: pyqtBoundSignal,
         from_serialized: Callable[[str], BaseDM],
         get_currently_allowed: Callable[[], Set[str]],
+        network: bdk.Network,
         parent: QObject | None = None,
     ) -> "DmConnection":
         async_dm_connection = AsyncDmConnection.from_dump(
@@ -826,6 +883,7 @@ class DmConnection(QObject):
             signal_dm=signal_dm,
             from_serialized=from_serialized,
             get_currently_allowed=get_currently_allowed,
+            network=network,
         )
 
         return cls(
@@ -865,19 +923,26 @@ class DmConnection(QObject):
     def unsubscribe(self, public_keys: List[PublicKey], on_done: Callable[[], None] | None = None):
         self.async_thread.run_coroutine(self.async_dm_connection.unsubscribe(public_keys), on_done=on_done)
 
-    def replay_events(self, on_done: Callable[[], None] | None = None):
-        self.async_thread.run_coroutine(self.async_dm_connection.replay_events(), on_done=on_done)
+    def replay_events_from_dump(self, on_done: Callable[[], None] | None = None):
+        self.async_thread.run_coroutine(self.async_dm_connection.replay_events_from_dump(), on_done=on_done)
 
     def stop(self):
         self.async_thread.stop()
 
+    def run(self, coro, on_done: Callable[[], None] | None = None):
+        self.async_thread.run_coroutine(coro, on_done=on_done)
+
+    def run_blocking(self, coro):
+        self.async_thread.run_coroutine_blocking(coro)
+
 
 class BaseProtocol(QObject):
-    signal_dm = pyqtSignal(BaseDM)
+    signal_dm = pyqtSignal(BaseDM, Event)
 
     def __init__(
         self,
-        last_shutdown: datetime,
+        sync_start: datetime,
+        network: bdk.Network,
         keys: Keys | None = None,
         dm_connection_dump: dict | None = None,
         parent: QObject | None = None,
@@ -885,7 +950,8 @@ class BaseProtocol(QObject):
         "Either keys or dm_connection_dump must be given"
         super().__init__(parent=parent)
         # start_time saves the last shutdown time
-        self.last_shutdown = last_shutdown
+        self.sync_start = sync_start
+        self.network = network
 
         self.dm_connection = (
             DmConnection.from_dump(
@@ -893,6 +959,7 @@ class BaseProtocol(QObject):
                 signal_dm=self.signal_dm,
                 from_serialized=self.from_serialized,
                 get_currently_allowed=self.get_currently_allowed,
+                network=network,
                 parent=self,
             )
             if dm_connection_dump
@@ -920,8 +987,10 @@ class BaseProtocol(QObject):
         self.dm_connection.disconnect()
         self.dm_connection.async_dm_connection.keys = keys
         self.dm_connection.async_dm_connection.relay_list = relay_list
-        self.last_shutdown = datetime.now()
+        # prevent redownloading the messages by setting the time to now
+        self.sync_start = datetime.now()
         self.dm_connection.refresh_client()
+
         self.subscribe()
 
     def set_relay_list(self, relay_list: RelayList):
@@ -938,16 +1007,19 @@ class NostrProtocol(BaseProtocol):
     def __init__(
         self,
         network: bdk.Network,
-        last_shutdown: datetime,
+        sync_start: datetime,
         keys: Keys | None = None,
         dm_connection_dump: Dict | None = None,
         use_compression=DEFAULT_USE_COMPRESSION,
         parent: QObject | None = None,
     ) -> None:
         "Either keys or dm_connection_dump must be given"
-        self.network = network
         super().__init__(
-            keys=keys, dm_connection_dump=dm_connection_dump, last_shutdown=last_shutdown, parent=parent
+            keys=keys,
+            dm_connection_dump=dm_connection_dump,
+            sync_start=sync_start,
+            parent=parent,
+            network=network,
         )
         self.use_compression = use_compression
 
@@ -998,7 +1070,7 @@ class NostrProtocol(BaseProtocol):
         return {
             # start_time saves the last shutdown time
             # the next starttime is the current time
-            "last_shutdown": datetime.now().timestamp(),
+            "sync_start": datetime.now().timestamp(),
             "dm_connection_dump": self.dm_connection.dump(),
             "use_compression": self.use_compression,
             "network": self.network.name,
@@ -1007,9 +1079,7 @@ class NostrProtocol(BaseProtocol):
     @classmethod
     def from_dump(cls, d: Dict) -> "NostrProtocol":
         # start_time saves the last shutdown time
-        d["last_shutdown"] = (
-            datetime.fromtimestamp(d["last_shutdown"]) if "last_shutdown" in d else datetime.now()
-        )
+        d["sync_start"] = datetime.fromtimestamp(d["sync_start"]) if "sync_start" in d else datetime.now()
         d["network"] = bdk.Network[d["network"]]
         return cls(**filtered_for_init(d, cls))
 
@@ -1020,7 +1090,7 @@ class GroupChat(BaseProtocol):
     def __init__(
         self,
         network: bdk.Network,
-        last_shutdown: datetime,
+        sync_start: datetime,
         keys: Keys | None = None,
         dm_connection_dump: dict | None = None,
         members: List[PublicKey] | None = None,
@@ -1029,13 +1099,16 @@ class GroupChat(BaseProtocol):
     ) -> None:
         "Either keys or dm_connection_dump must be given"
         self.members: List[PublicKey] = members if members else []
-        self.network = network
         self.use_compression = use_compression
         self.nip17_time_uncertainty = timedelta(
             days=2
         )  # 2 days according to https://github.com/nostr-protocol/nips/blob/master/17.md#encrypting
         super().__init__(
-            keys=keys, dm_connection_dump=dm_connection_dump, last_shutdown=last_shutdown, parent=parent
+            keys=keys,
+            dm_connection_dump=dm_connection_dump,
+            sync_start=sync_start,
+            parent=parent,
+            network=network,
         )
 
     def get_currently_allowed(self) -> Set[str]:
@@ -1074,9 +1147,7 @@ class GroupChat(BaseProtocol):
         def on_done(subscription_id: str):
             logger.debug(f"{self.__class__.__name__}  Successfully subscribed to {subscription_id}")
 
-        start_time = (
-            self.last_shutdown - self.nip17_time_uncertainty if self.last_shutdown else self.last_shutdown
-        )
+        start_time = self.sync_start - self.nip17_time_uncertainty if self.sync_start else self.sync_start
         self.dm_connection.subscribe(start_time=start_time, on_done=on_done)
 
     def dump(self):
@@ -1084,7 +1155,7 @@ class GroupChat(BaseProtocol):
         return {
             # start_time saves the last shutdown time
             # the next start_time is the current time
-            "last_shutdown": datetime.now().timestamp(),
+            "sync_start": datetime.now().timestamp(),
             "dm_connection_dump": self.dm_connection.dump(forbidden_data_types=forbidden_data_types),
             "members": [member.to_bech32() for member in self.members],
             "use_compression": self.use_compression,
@@ -1094,9 +1165,7 @@ class GroupChat(BaseProtocol):
     @classmethod
     def from_dump(cls, d: Dict) -> "GroupChat":
         # start_time saves the last shutdown time
-        d["last_shutdown"] = (
-            datetime.fromtimestamp(d["last_shutdown"]) if "last_shutdown" in d else datetime.now()
-        )
+        d["sync_start"] = datetime.fromtimestamp(d["sync_start"]) if "sync_start" in d else datetime.now()
         d["network"] = bdk.Network[d["network"]]
         d["members"] = [PublicKey.from_bech32(pk) for pk in d["members"]]
         return cls(**filtered_for_init(d, cls))
@@ -1104,20 +1173,23 @@ class GroupChat(BaseProtocol):
     def renew_own_key(self, keys: Keys | None = None):
         # send new key to memebers
         for member in self.members:
-            self.dm_connection.send(
-                BitcoinDM(
-                    event=None,
-                    label=ChatLabel.DeleteMeRequest,
-                    description="",
-                    use_compression=self.use_compression,
-                    created_at=datetime.now(),
-                ),
-                member,
+            # run this blocking such that you ensure the messages are out
+            # before you reset the connection
+            self.dm_connection.async_thread.run_coroutine_blocking(
+                self.dm_connection.async_dm_connection.send(
+                    BitcoinDM(
+                        event=None,
+                        label=ChatLabel.DeleteMeRequest,
+                        description="",
+                        use_compression=self.use_compression,
+                        created_at=datetime.now(),
+                    ),
+                    member,
+                )
             )
+
             # self.dm_connection.send(ProtocolDM(event=None, public_key_bech32=keys.public_key().to_bech32(),please_trust_public_key_bech32=True), member)
             # logger.debug(f"Send my new public key {keys.public_key().to_bech32()} to {member.to_bech32()}")
 
-        # unclear why this is necessary...
-        sleep(0.1)
         keys = keys if keys else Keys.generate()
         self.refresh_dm_connection(keys)
