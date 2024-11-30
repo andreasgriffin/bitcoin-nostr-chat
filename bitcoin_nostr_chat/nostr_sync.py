@@ -47,7 +47,7 @@ from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox
 
 from .connected_devices.chat import Chat, LabelConnector
-from .connected_devices.connected_devices import UI, TrustedDevice, UnTrustedDevice
+from .connected_devices.ui import UI, TrustedDevice, UnTrustedDevice
 from .html import html_f
 from .nostr import (
     BitcoinDM,
