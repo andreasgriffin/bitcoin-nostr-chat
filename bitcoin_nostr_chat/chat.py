@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 
 import bdkpython as bdk
-from bitcoin_qr_tools.data import Data
+from bitcoin_qr_tools.data import Data, DataType
 from nostr_sdk import PublicKey
 from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox
@@ -124,16 +124,17 @@ class Chat(BaseChat):
         restrict_to_counterparties: List[PublicKey] | None = None,
         use_compression=DEFAULT_USE_COMPRESSION,
         display_labels=[ChatLabel.GroupChat, ChatLabel.SingleRecipient],
+        display_file_types=[DataType.PSBT, DataType.Tx],
         send_label=ChatLabel.GroupChat,
     ) -> None:
         super().__init__(network, group_chat, signals_min, use_compression)
         self.display_labels = display_labels
         self.send_label = send_label
         self.restrict_to_counterparties = restrict_to_counterparties
+        self.display_file_types = display_file_types
 
         # signals
         self.group_chat.signal_dm.connect(self.add_to_chat)
-
         self.gui.signal_on_message_send.connect(self.on_send_message_in_groupchat)
         self.gui.signal_share_filecontent.connect(self.on_share_file_in_groupchat)
 
@@ -145,6 +146,9 @@ class Chat(BaseChat):
             return
 
         if dm.label not in self.display_labels:
+            return
+
+        if dm.data and dm.data.data_type not in self.display_file_types:
             return
 
         self.gui.add_dm(dm, is_me=self.is_me(dm.author))

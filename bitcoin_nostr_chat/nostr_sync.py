@@ -199,7 +199,7 @@ class BaseNostrSync(QObject):
         individual_chats_visible=True,
         use_compression=DEFAULT_USE_COMPRESSION,
         parent: QObject | None = None,
-    ) -> "BaseNostrSync":
+    ):
         nostr_protocol = NostrProtocol(
             network=network,
             keys=protocol_keys,
@@ -241,7 +241,7 @@ class BaseNostrSync(QObject):
         d: Dict[str, Any],
         signals_min: SignalsMin,
         parent: QObject | None = None,
-    ) -> "BaseNostrSync":
+    ):
         d["nostr_protocol"] = NostrProtocol.from_dump(d["nostr_protocol"])
         d["group_chat"] = GroupChat.from_dump(d["group_chat"])
         d["network"] = bdk.Network[d["network"]]
