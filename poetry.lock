@@ -37,13 +37,13 @@ files = [
 
 [[package]]
 name = "bitcoin-qr-tools"
-version = "0.15.1"
+version = "0.15.2"
 description = "Python bitcoin qr reader and generator"
 optional = false
 python-versions = "<3.13,>=3.9"
 files = [
-    {file = "bitcoin_qr_tools-0.15.1-py3-none-any.whl", hash = "sha256:acedd046c509931b3e15193c0002eef12028fab86bca06e70323d098d4f5d06b"},
-    {file = "bitcoin_qr_tools-0.15.1.tar.gz", hash = "sha256:bb415840a7bacb2a4ce1ed4285dd103593b9ae768b0202753e7371f7b14de07e"},
+    {file = "bitcoin_qr_tools-0.15.2-py3-none-any.whl", hash = "sha256:b95fbaa9030699c6e483ad43d5801303d3e9cb0019282586deb7eee4354a90d0"},
+    {file = "bitcoin_qr_tools-0.15.2.tar.gz", hash = "sha256:24426fe13ab366c10f851ecec4103ae672a47c70afc616e655cc48a1866fb52d"},
 ]
 
 [package.dependencies]
@@ -1302,4 +1302,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.9,<3.13"
-content-hash = "a27ecf6e1caeb254e0eaae9a0a15d0eff9d860dc446ad5bc39cd6496314f6c73"
+content-hash = "8ff2c54d8ae0b1f09ee0b5f6bd5e29488e025add4f6306e7937835cf4360a18f"
