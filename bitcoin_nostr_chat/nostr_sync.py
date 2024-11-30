@@ -217,7 +217,7 @@ class BaseNostrSync(QObject):
             sync_start=None,
             parent=parent,
         )
-        return BaseNostrSync(
+        return cls(
             network=network,
             nostr_protocol=nostr_protocol,
             group_chat=group_chat,
@@ -437,11 +437,13 @@ class NostrSync(BaseNostrSync):
             group_chat=self.group_chat,
             signals_min=signals_min,
             use_compression=use_compression,
+            display_labels=[ChatLabel.GroupChat, ChatLabel.SingleRecipient],
+            send_label=ChatLabel.GroupChat,
         )
-        self.ui.tabs.addTab(self.chat.gui, self.tr("Chat"))
+        self.ui.tabs.addTab(self.chat.gui, self.tr("Group Chat"))
 
 
-class NostrSyncWithSingleChats(NostrSync):
+class NostrSyncWithSingleChats(BaseNostrSync):
     def __init__(
         self,
         network: bdk.Network,
@@ -466,11 +468,45 @@ class NostrSyncWithSingleChats(NostrSync):
             parent,
         )
 
+        self.label_connector = LabelConnector(
+            group_chat=self.group_chat, signals_min=signals_min, debug=debug
+        )
+
+        self.chat = Chat(
+            network=network,
+            group_chat=self.group_chat,
+            signals_min=signals_min,
+            use_compression=use_compression,
+            display_labels=[ChatLabel.GroupChat],
+            send_label=ChatLabel.GroupChat,
+        )
+        self.ui.tabs.addTab(self.chat.gui, self.tr("Chat"))
+
+        self.chats: Dict[str, Chat] = {}
+
         self.signal_add_trusted_device.connect(self.add_chat_for_trusted_device)
         self.signal_remove_trusted_device.connect(self.remove_chat_for_trusted_device)
 
     def add_chat_for_trusted_device(self, trusted_device: TrustedDevice):
-        pass
+        chat = Chat(
+            network=self.network,
+            group_chat=self.group_chat,
+            signals_min=self.signals_min,
+            use_compression=self.use_compression,
+            restrict_to_counterparties=[PublicKey.from_bech32(trusted_device.pub_key_bech32)],
+            display_labels=[ChatLabel.SingleRecipient],
+            send_label=ChatLabel.SingleRecipient,
+        )
+        self.chats[trusted_device.pub_key_bech32] = chat
+        self.ui.tabs.addTab(chat.gui, short_key(trusted_device.pub_key_bech32))
 
     def remove_chat_for_trusted_device(self, trusted_device: TrustedDevice):
-        pass
+        if trusted_device.pub_key_bech32 not in self.chats:
+            return
+        chat = self.chats[trusted_device.pub_key_bech32]
+
+        index = self.ui.tabs.indexOf(chat.gui)
+        if index >= 0:
+            self.ui.tabs.removeTab(index)
+
+        del self.chats[trusted_device.pub_key_bech32]

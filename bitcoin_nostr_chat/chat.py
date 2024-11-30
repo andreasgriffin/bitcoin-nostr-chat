@@ -127,9 +127,11 @@ class Chat(BaseChat):
         restrict_to_counterparties: List[PublicKey] | None = None,
         use_compression=DEFAULT_USE_COMPRESSION,
         display_labels=[ChatLabel.GroupChat, ChatLabel.SingleRecipient],
+        send_label=ChatLabel.GroupChat,
     ) -> None:
         super().__init__(network, group_chat, signals_min, use_compression)
         self.display_labels = display_labels
+        self.send_label = send_label
         self.restrict_to_counterparties = restrict_to_counterparties
 
         # signals
@@ -146,7 +148,6 @@ class Chat(BaseChat):
             return
 
         if dm.label not in self.display_labels:
-            logger.warning(f"{self.__class__.__name__}:Unrecognized dm.label {dm.label}")
             return
 
         self.gui.add_dm(dm, is_me=self.is_me(dm.author))
@@ -160,7 +161,7 @@ class Chat(BaseChat):
 
     def on_send_message_in_groupchat(self, text: str):
         dm = BitcoinDM(
-            label=ChatLabel.GroupChat,
+            label=self.send_label,
             description=text,
             event=None,
             use_compression=self.use_compression,
@@ -171,7 +172,7 @@ class Chat(BaseChat):
 
     def on_share_file_in_groupchat(self, file_content: str, file_name: str):
         try:
-            dm = self._file_to_dm(file_content=file_content, label=ChatLabel.GroupChat, file_name=file_name)
+            dm = self._file_to_dm(file_content=file_content, label=self.send_label, file_name=file_name)
         except Exception:
             create_custom_message_box(
                 QMessageBox.Icon.Warning, "Error", self.tr("You can only send only PSBTs or transactions")
