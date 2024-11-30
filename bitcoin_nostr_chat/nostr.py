@@ -1141,8 +1141,8 @@ class GroupChat(BaseProtocol):
         copy_dm.event = None
         self.dm_connection.send(copy_dm, receiver=self.dm_connection.async_dm_connection.keys.public_key())
 
-    def send(self, dm: BitcoinDM, send_also_to_me=True):
-        for public_key in self.members:
+    def send_to(self, dm: BitcoinDM, recipients: List[PublicKey], send_also_to_me=True):
+        for public_key in recipients:
             on_done = None
             if send_also_to_me and public_key == self.members[-1]:
                 # for the last recipient, make a callback to send a copy to myself
@@ -1153,6 +1153,9 @@ class GroupChat(BaseProtocol):
 
         if not self.members:
             logger.debug(f"Sending not done, since self.members is empty")
+
+    def send(self, dm: BitcoinDM, send_also_to_me=True):
+        self.send_to(dm=dm, recipients=self.members, send_also_to_me=send_also_to_me)
 
     def members_including_me(self):
         return self.members + [self.dm_connection.async_dm_connection.keys.public_key()]

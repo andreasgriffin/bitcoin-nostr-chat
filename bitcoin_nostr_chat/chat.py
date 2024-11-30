@@ -29,6 +29,7 @@
 
 import logging
 from datetime import datetime
+from typing import List
 
 from bitcoin_nostr_chat import DEFAULT_USE_COMPRESSION
 from bitcoin_nostr_chat.dialogs import create_custom_message_box
@@ -123,11 +124,13 @@ class Chat(BaseChat):
         network: bdk.Network,
         group_chat: GroupChat,
         signals_min: SignalsMin,
+        restrict_to_counterparties: List[PublicKey] | None = None,
         use_compression=DEFAULT_USE_COMPRESSION,
         display_labels=[ChatLabel.GroupChat, ChatLabel.SingleRecipient],
     ) -> None:
         super().__init__(network, group_chat, signals_min, use_compression)
         self.display_labels = display_labels
+        self.restrict_to_counterparties = restrict_to_counterparties
 
         # signals
         self.group_chat.signal_dm.connect(self.add_to_chat)
@@ -149,6 +152,12 @@ class Chat(BaseChat):
         self.gui.add_dm(dm, is_me=self.is_me(dm.author))
         self.signal_add_dm_to_chat.emit(dm)
 
+    def _send(self, dm: BitcoinDM):
+        if self.restrict_to_counterparties:
+            self.group_chat.send_to(dm, recipients=self.restrict_to_counterparties)
+        else:
+            self.group_chat.send(dm)
+
     def on_send_message_in_groupchat(self, text: str):
         dm = BitcoinDM(
             label=ChatLabel.GroupChat,
@@ -157,7 +166,7 @@ class Chat(BaseChat):
             use_compression=self.use_compression,
             created_at=datetime.now(),
         )
-        self.group_chat.send(dm)
+        self._send(dm)
         self.signal_send_dm.emit(dm)
 
     def on_share_file_in_groupchat(self, file_content: str, file_name: str):
@@ -168,5 +177,5 @@ class Chat(BaseChat):
                 QMessageBox.Icon.Warning, "Error", self.tr("You can only send only PSBTs or transactions")
             )
             return
-        self.group_chat.send(dm)
+        self._send(dm)
         self.signal_send_dm.emit(dm)
