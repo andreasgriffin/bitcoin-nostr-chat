@@ -28,7 +28,6 @@
 
 
 import logging
-from collections import deque
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QSplitter, QTextEdit, QVBoxLayout, QWidget
@@ -37,7 +36,7 @@ from bitcoin_nostr_chat.connected_devices.bitcoin_dm_chat_gui import BitcoinDmCh
 from bitcoin_nostr_chat.connected_devices.util import read_QIcon, short_key
 
 from ..html import html_f
-from ..nostr import BitcoinDM, RelayList
+from ..nostr import RelayList
 from ..signals_min import SignalsMin
 
 logger = logging.getLogger(__name__)
@@ -203,8 +202,6 @@ class TrustedDevice(BaseDevice):
         self,
         pub_key_bech32: str,
         signals_min: SignalsMin,
-        on_send: Optional[Callable[[str], None]] = None,
-        chat_visible=True,
     ):
         super().__init__(pub_key_bech32)
         self.signals_min = signals_min
@@ -248,18 +245,11 @@ class TrustedDevice(BaseDevice):
 
         self.label = QLabel()
         self.groupbox_layout.addWidget(self.label)
-        self.chat_gui = BitcoinDmChatGui(signals_min=self.signals_min)
-        self.chat_gui.setVisible(chat_visible)
-        self.groupbox_layout.addWidget(self.chat_gui)
         self.setMinimumHeight(self.groupbox.sizeHint().height())
 
         self.create_close_button()
 
         self.updateUi()
-
-        # signals
-        if on_send:
-            self.chat_gui.signal_on_message_send.connect(on_send)
         signals_min.language_switch.connect(self.updateUi)
 
     def updateUi(self):
@@ -273,11 +263,10 @@ class TrustedDevice(BaseDevice):
         )
 
     @classmethod
-    def from_untrusted(cls, untrusted_device: UnTrustedDevice, chat_visible=True) -> "TrustedDevice":
+    def from_untrusted(cls, untrusted_device: UnTrustedDevice) -> "TrustedDevice":
         return TrustedDevice(
             untrusted_device.pub_key_bech32,
             signals_min=untrusted_device.signals_min,
-            chat_visible=chat_visible,
         )
 
 
@@ -481,10 +470,6 @@ class ConnectedDevices(QtWidgets.QWidget):
     def trust_device(
         self,
         untrusted_device: UnTrustedDevice,
-        callback_on_message_send: Callable | None = None,
-        callback_share_filepath: Callable[[str, str], None] | None = None,
-        callback_attachement_clicked: Callable | None = None,
-        callback_clear_chat: Callable[[deque[BitcoinDM]], None] | None = None,
     ) -> TrustedDevice:
         self.untrusted_devices.remove_device(untrusted_device)
 
@@ -492,24 +477,8 @@ class ConnectedDevices(QtWidgets.QWidget):
         if device:
             return device
 
-        trusted_device = TrustedDevice.from_untrusted(
-            untrusted_device, chat_visible=self.individual_chats_visible
-        )
+        trusted_device = TrustedDevice.from_untrusted(untrusted_device)
         self.add_trusted_device(trusted_device)
-
-        if callback_on_message_send:
-            trusted_device.chat_gui.signal_on_message_send.connect(callback_on_message_send)
-        if callback_share_filepath:
-            trusted_device.chat_gui.signal_share_filecontent.connect(callback_share_filepath)
-        if callback_attachement_clicked:
-            trusted_device.chat_gui.chat_list_display.signal_attachement_clicked.connect(
-                callback_attachement_clicked
-            )
-        if callback_clear_chat:
-            trusted_device.chat_gui.chat_list_display.signal_clear.connect(
-                lambda: callback_clear_chat(trusted_device.chat_gui.dms)
-            )
-
         return trusted_device
 
     def untrust_device(self, trusted_device: TrustedDevice) -> UnTrustedDevice:

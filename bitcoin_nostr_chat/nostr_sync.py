@@ -44,7 +44,7 @@ from typing import Any, Dict, Optional
 
 import bdkpython as bdk
 from bitcoin_qr_tools.data import Data, DataType
-from nostr_sdk import EventId, Keys, PublicKey, SecretKey
+from nostr_sdk import Keys, PublicKey, SecretKey
 from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox
 
@@ -336,13 +336,8 @@ class NostrSync(QObject):
         chat_gui = None
         file_object = FileObject(path=dm.description, data=dm.data) if dm.data else None
 
-        if dm.label == ChatLabel.GroupChat:
+        if dm.label in [ChatLabel.GroupChat, ChatLabel.SingleRecipient]:
             chat_gui = self.gui.groupchat_gui
-        elif dm.label == ChatLabel.SingleRecipient:
-            trusted_device = self.get_trusted_device_of_single_recipient_dm(dm)
-            if not trusted_device:
-                return
-            chat_gui = trusted_device.chat_gui
         else:
             logger.warning(f"Unrecognized dm.label {dm.label}")
             return
@@ -362,13 +357,8 @@ class NostrSync(QObject):
             )
 
     def add_to_chat(self, dm: BitcoinDM):
-        if dm.label == ChatLabel.GroupChat:
+        if dm.label in [ChatLabel.GroupChat, ChatLabel.SingleRecipient]:
             chat_gui = self.gui.groupchat_gui
-        elif dm.label == ChatLabel.SingleRecipient:
-            trusted_device = self.get_trusted_device_of_single_recipient_dm(dm)
-            if not trusted_device:
-                return
-            chat_gui = trusted_device.chat_gui
         else:
             logger.warning(f"Unrecognized dm.label {dm.label}")
             return
@@ -462,70 +452,14 @@ class NostrSync(QObject):
 
     def untrust_device(self, trusted_device: TrustedDevice):
         self.group_chat.remove_member(PublicKey.from_bech32(trusted_device.pub_key_bech32))
-        processed_dms = self.group_chat.dm_connection.async_dm_connection.notification_handler.processed_dms
-        for dm in trusted_device.chat_gui.dms:
-            if dm in processed_dms:
-                processed_dms.remove(dm)
-            if dm.event:
-                self.group_chat.dm_connection.async_dm_connection.notification_handler.untrusted_events.append(
-                    dm.event
-                )
         untrusted_device = self.gui.untrust_device(trusted_device)
         self.connect_untrusted_device(untrusted_device)
 
     def trust_device(self, untrusted_device: UnTrustedDevice, show_message=True) -> TrustedDevice:
         device_public_key = PublicKey.from_bech32(untrusted_device.pub_key_bech32)
         self.group_chat.add_member(device_public_key)
-
-        def send_copy_to_myself(dm: BitcoinDM, receiver: PublicKey, send_to_other_event_id: EventId):
-            logger.debug(
-                f"Successfully sent to {receiver.to_bech32()} (eventid = {send_to_other_event_id}) and now send copy to myself"
-            )
-            copy_dm = BitcoinDM.from_dump(dm.dump(), network=self.network)
-            copy_dm.event = None
-            copy_dm.intended_recipient = untrusted_device.pub_key_bech32
-            self.group_chat.dm_connection.send(
-                copy_dm, receiver=self.group_chat.dm_connection.async_dm_connection.keys.public_key()
-            )
-
-        def callback_on_message_send(text: str):
-            dm = BitcoinDM(
-                event=None,
-                label=ChatLabel.SingleRecipient,
-                description=text,
-                use_compression=self.use_compression,
-                created_at=datetime.now(),
-            )
-            receiver = PublicKey.from_bech32(untrusted_device.pub_key_bech32)
-            self.group_chat.dm_connection.send(
-                dm, receiver=receiver, on_done=lambda event_id: send_copy_to_myself(dm, receiver, event_id)
-            )
-
-        def callback_share_file(file_content: str, file_name: str):
-            try:
-                dm = self.file_to_dm(
-                    file_content=file_content, label=ChatLabel.SingleRecipient, file_name=file_name
-                )
-            except Exception:
-                create_custom_message_box(
-                    QMessageBox.Icon.Warning,
-                    self.tr("Error"),
-                    self.tr("{file_name} could not be recognized as Bitcoin data").format(
-                        file_name=file_name
-                    ),
-                )
-                return
-            receiver = PublicKey.from_bech32(untrusted_device.pub_key_bech32)
-            self.group_chat.dm_connection.send(
-                dm, receiver=receiver, on_done=lambda event_id: send_copy_to_myself(dm, receiver, event_id)
-            )
-
         trusted_device = self.gui.trust_device(
             untrusted_device,
-            callback_attachement_clicked=self.signal_attachement_clicked.emit,
-            callback_on_message_send=callback_on_message_send,
-            callback_share_filepath=callback_share_file,
-            callback_clear_chat=self.on_clear_chat_from_memory,
         )
 
         assert trusted_device.pub_key_bech32 == untrusted_device.pub_key_bech32
