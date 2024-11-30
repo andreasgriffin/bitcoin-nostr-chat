@@ -28,10 +28,10 @@
 
 
 import logging
-from collections import deque
 from datetime import datetime
 
 from bitcoin_nostr_chat.connected_devices.util import read_QIcon
+from bitcoin_nostr_chat.dialogs import file_to_str
 from bitcoin_nostr_chat.signals_min import SignalsMin
 
 from ..signals_min import SignalsMin
@@ -66,7 +66,7 @@ from PyQt6.QtWidgets import (
 
 
 class MultiLineListView(QWidget):
-    signal_clear = pyqtSignal(deque)
+    signal_clear = pyqtSignal()
 
     ROLE_SORT = 1001
     itemClicked = pyqtSignal(QStandardItemModel)
@@ -185,7 +185,7 @@ class ChatListWidget(MultiLineListView):
 
 class ChatGui(QWidget):
     signal_on_message_send = pyqtSignal(str)
-    signal_share_filepath = pyqtSignal(str)
+    signal_share_filecontent = pyqtSignal(str, str)  # file_content, filename
 
     def __init__(self, signals_min: SignalsMin):
         super().__init__()
@@ -238,7 +238,7 @@ class ChatGui(QWidget):
             return
 
         logger.debug(f"Selected file: {file_path}")
-        self.signal_share_filepath.emit(file_path)
+        self.signal_share_filecontent.emit(file_to_str(file_path), os.path.basename(file_path))
 
     def updateDynamicLayout(self):
         threashold = 200

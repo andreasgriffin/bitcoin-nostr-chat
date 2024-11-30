@@ -40,7 +40,6 @@ from .signals_min import SignalsMin
 
 logger = logging.getLogger(__name__)
 
-import os
 from typing import Any, Dict, Optional
 
 import bdkpython as bdk
@@ -133,7 +132,7 @@ class NostrSync(QObject):
 
         self.gui.signal_set_relays.connect(self.on_set_relays)
         self.gui.groupchat_gui.signal_on_message_send.connect(self.on_send_message_in_groupchat)
-        self.gui.groupchat_gui.signal_share_filepath.connect(self.on_share_filepath_in_groupchat)
+        self.gui.groupchat_gui.signal_share_filecontent.connect(self.on_share_file_in_groupchat)
         self.gui.signal_trust_device.connect(self.on_gui_signal_trust_device)
         self.gui.signal_untrust_device.connect(self.untrust_device)
         self.signal_attachement_clicked.connect(self.on_signal_attachement_clicked)
@@ -178,8 +177,10 @@ class NostrSync(QObject):
         )
 
     def on_clear_chat_from_memory(self, dms: deque[BitcoinDM]):
+        processed_dms = self.group_chat.dm_connection.async_dm_connection.notification_handler.processed_dms
         for dm in dms:
-            self.group_chat.dm_connection.async_dm_connection.notification_handler.processed_dms.remove(dm)
+            if dm in processed_dms:
+                processed_dms.remove(dm)
 
     def set_own_key(self):
         nsec = SecretKeyDialog().get_secret_key()
@@ -409,14 +410,15 @@ class NostrSync(QObject):
             )
         )
 
-    def filepath_to_dm(self, label: ChatLabel, file_path: str) -> BitcoinDM:
-        s = file_to_str(file_path)
-        bitcoin_data = Data.from_str(s, network=self.network)
+    def file_to_dm(self, file_content: str, label: ChatLabel, file_name: str) -> BitcoinDM:
+        bitcoin_data = Data.from_str(file_content, network=self.network)
         if not bitcoin_data:
-            raise Exception(f"Could not recognize {s} as BitcoinData")
+            raise Exception(
+                self.tr("Could not recognize {file_content} as BitcoinData").format(file_content=file_content)
+            )
         dm = BitcoinDM(
             label=label,
-            description=os.path.basename(file_path),
+            description=file_name,
             event=None,
             data=bitcoin_data,
             use_compression=self.use_compression,
@@ -424,18 +426,15 @@ class NostrSync(QObject):
         )
         return dm
 
-    def on_share_filepath_in_groupchat(self, file_path: str):
+    def on_share_file_in_groupchat(self, file_content: str, file_name: str):
         try:
-            dm = self.filepath_to_dm(label=ChatLabel.GroupChat, file_path=file_path)
+            dm = self.file_to_dm(file_content=file_content, label=ChatLabel.GroupChat, file_name=file_name)
         except Exception:
             create_custom_message_box(
-                QMessageBox.Icon.Warning, "Error", f"{file_path} could not be recognized as Bitcoin data"
+                QMessageBox.Icon.Warning, "Error", self.tr("You can only send only PSBTs or transactions")
             )
             return
         self.group_chat.send(dm)
-        # after sending add the author  (sending it in the dm would be redundant)
-        dm.author = self.group_chat.dm_connection.async_dm_connection.keys.public_key()
-        self.add_to_chat(dm)
 
     def connect_untrusted_device(self, untrusted_device: UnTrustedDevice):
         if untrusted_device.pub_key_bech32 in [k.to_bech32() for k in self.group_chat.members]:
@@ -463,8 +462,10 @@ class NostrSync(QObject):
 
     def untrust_device(self, trusted_device: TrustedDevice):
         self.group_chat.remove_member(PublicKey.from_bech32(trusted_device.pub_key_bech32))
+        processed_dms = self.group_chat.dm_connection.async_dm_connection.notification_handler.processed_dms
         for dm in trusted_device.chat_gui.dms:
-            self.group_chat.dm_connection.async_dm_connection.notification_handler.processed_dms.remove(dm)
+            if dm in processed_dms:
+                processed_dms.remove(dm)
             if dm.event:
                 self.group_chat.dm_connection.async_dm_connection.notification_handler.untrusted_events.append(
                     dm.event
@@ -500,12 +501,18 @@ class NostrSync(QObject):
                 dm, receiver=receiver, on_done=lambda event_id: send_copy_to_myself(dm, receiver, event_id)
             )
 
-        def callback_share_filepath(file_path: str):
+        def callback_share_file(file_content: str, file_name: str):
             try:
-                dm = self.filepath_to_dm(label=ChatLabel.SingleRecipient, file_path=file_path)
+                dm = self.file_to_dm(
+                    file_content=file_content, label=ChatLabel.SingleRecipient, file_name=file_name
+                )
             except Exception:
                 create_custom_message_box(
-                    QMessageBox.Icon.Warning, "Error", f"{file_path} could not be recognized as Bitcoin data"
+                    QMessageBox.Icon.Warning,
+                    self.tr("Error"),
+                    self.tr("{file_name} could not be recognized as Bitcoin data").format(
+                        file_name=file_name
+                    ),
                 )
                 return
             receiver = PublicKey.from_bech32(untrusted_device.pub_key_bech32)
@@ -517,7 +524,7 @@ class NostrSync(QObject):
             untrusted_device,
             callback_attachement_clicked=self.signal_attachement_clicked.emit,
             callback_on_message_send=callback_on_message_send,
-            callback_share_filepath=callback_share_filepath,
+            callback_share_filepath=callback_share_file,
             callback_clear_chat=self.on_clear_chat_from_memory,
         )
 

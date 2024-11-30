@@ -1133,10 +1133,22 @@ class GroupChat(BaseProtocol):
             self.dm_connection.unsubscribe([remove_member])
             logger.debug(f"Removed {remove_member.to_bech32()}")
 
+    def _send_copy_to_myself(self, dm: BitcoinDM, receiver: PublicKey, send_to_other_event_id: EventId):
+        logger.debug(
+            f"Successfully sent to {receiver.to_bech32()} (eventid = {send_to_other_event_id}) and now send copy to myself"
+        )
+        copy_dm = BitcoinDM.from_dump(dm.dump(), network=self.network)
+        copy_dm.event = None
+        self.dm_connection.send(copy_dm, receiver=self.dm_connection.async_dm_connection.keys.public_key())
+
     def send(self, dm: BitcoinDM, send_also_to_me=True):
-        recipients = self.members_including_me() if send_also_to_me else self.members
-        for public_key in recipients:
-            self.dm_connection.send(dm, public_key)
+        for public_key in self.members:
+            on_done = None
+            if send_also_to_me and public_key == self.members[-1]:
+                # for the last recipient, make a callback to send a copy to myself
+                # such that, if the last recipient gets it, then i get a copy too
+                on_done = lambda event_id: self._send_copy_to_myself(dm, public_key, event_id)
+            self.dm_connection.send(dm, public_key, on_done=on_done)
             logger.debug(f"Send to {public_key.to_bech32()}")
 
         if not self.members:

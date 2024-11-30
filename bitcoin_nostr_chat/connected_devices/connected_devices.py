@@ -380,12 +380,12 @@ class ConnectedDevices(QtWidgets.QWidget):
         toolbar_button.setIcon(read_QIcon("preferences.png"))
         header_layout.addWidget(toolbar_button)
 
-        menu = QMenu(self)
-        self.action_export_identity = menu.addAction("", self.export_sync_key)
-        self.action_set_keys = menu.addAction("", self.signal_set_keys.emit)
-        self.action_reset_identity = menu.addAction("", self.signal_reset_keys.emit)
-        self.action_set_relays = menu.addAction("", self.ask_for_nostr_relays)
-        toolbar_button.setMenu(menu)
+        self.menu = QMenu(self)
+        self.action_export_identity = self.menu.addAction("", self.export_sync_key)
+        self.action_set_keys = self.menu.addAction("", self.signal_set_keys.emit)
+        self.action_reset_identity = self.menu.addAction("", self.signal_reset_keys.emit)
+        self.action_set_relays = self.menu.addAction("", self.ask_for_nostr_relays)
+        toolbar_button.setMenu(self.menu)
         toolbar_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         toolbar_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
@@ -482,7 +482,7 @@ class ConnectedDevices(QtWidgets.QWidget):
         self,
         untrusted_device: UnTrustedDevice,
         callback_on_message_send: Callable | None = None,
-        callback_share_filepath: Callable | None = None,
+        callback_share_filepath: Callable[[str, str], None] | None = None,
         callback_attachement_clicked: Callable | None = None,
         callback_clear_chat: Callable[[deque[BitcoinDM]], None] | None = None,
     ) -> TrustedDevice:
@@ -500,7 +500,7 @@ class ConnectedDevices(QtWidgets.QWidget):
         if callback_on_message_send:
             trusted_device.chat_gui.signal_on_message_send.connect(callback_on_message_send)
         if callback_share_filepath:
-            trusted_device.chat_gui.signal_share_filepath.connect(callback_share_filepath)
+            trusted_device.chat_gui.signal_share_filecontent.connect(callback_share_filepath)
         if callback_attachement_clicked:
             trusted_device.chat_gui.chat_list_display.signal_attachement_clicked.connect(
                 callback_attachement_clicked
