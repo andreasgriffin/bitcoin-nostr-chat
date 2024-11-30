@@ -159,10 +159,7 @@ class BaseNostrSync(QObject):
         logger.info(f"Done Setting relay_list {relay_list} ")
 
     def is_me(self, public_key: PublicKey) -> bool:
-        return (
-            public_key.to_bech32()
-            == self.group_chat.dm_connection.async_dm_connection.keys.public_key().to_bech32()
-        )
+        return public_key.to_bech32() == self.group_chat.my_public_key().to_bech32()
 
     def set_own_key(self):
         nsec = SecretKeyDialog().get_secret_key()
@@ -185,7 +182,7 @@ class BaseNostrSync(QObject):
         # ask the members to trust my new key again (they need to manually approve)
         for member in self.group_chat.members:
             self.nostr_protocol.publish_trust_me_back(
-                author_public_key=self.group_chat.dm_connection.async_dm_connection.keys.public_key(),
+                author_public_key=self.group_chat.my_public_key(),
                 recipient_public_key=member,
             )
 
@@ -275,9 +272,7 @@ class BaseNostrSync(QObject):
         self.group_chat.dm_connection.unsubscribe_all()
 
     def publish_my_key_in_protocol(self, force=False):
-        self.nostr_protocol.publish_public_key(
-            self.group_chat.dm_connection.async_dm_connection.keys.public_key(), force=force
-        )
+        self.nostr_protocol.publish_public_key(self.group_chat.my_public_key(), force=force)
 
     def on_dm(self, dm: BitcoinDM):
         if not dm.author:
@@ -385,9 +380,7 @@ class BaseNostrSync(QObject):
                     "To complete the connection, accept my {id} request on the other device {other}."
                 ).format(
                     id=html_f(
-                        short_key(
-                            self.group_chat.dm_connection.async_dm_connection.keys.public_key().to_bech32()
-                        ),
+                        short_key(self.group_chat.my_public_key().to_bech32()),
                         bf=True,
                     ),
                     other=html_f(short_key(untrusted_device.pub_key_bech32), bf=True),
@@ -397,7 +390,7 @@ class BaseNostrSync(QObject):
         self.signal_add_trusted_device.emit(trusted_device)
 
         self.nostr_protocol.publish_trust_me_back(
-            author_public_key=self.group_chat.dm_connection.async_dm_connection.keys.public_key(),
+            author_public_key=self.group_chat.my_public_key(),
             recipient_public_key=device_public_key,
         )
         return trusted_device

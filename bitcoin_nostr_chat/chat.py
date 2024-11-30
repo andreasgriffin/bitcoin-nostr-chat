@@ -87,10 +87,7 @@ class BaseChat(QObject):
         self.gui.chat_list_display.signal_clear.connect(self.clear_chat_from_memory)
 
     def is_me(self, public_key: PublicKey) -> bool:
-        return (
-            public_key.to_bech32()
-            == self.group_chat.dm_connection.async_dm_connection.keys.public_key().to_bech32()
-        )
+        return public_key.to_bech32() == self.group_chat.my_public_key().to_bech32()
 
     def _file_to_dm(self, file_content: str, label: ChatLabel, file_name: str) -> BitcoinDM:
         bitcoin_data = Data.from_str(file_content, network=self.network)
