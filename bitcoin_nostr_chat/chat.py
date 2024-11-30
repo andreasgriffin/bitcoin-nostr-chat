@@ -32,6 +32,8 @@ from datetime import datetime
 
 from bitcoin_nostr_chat import DEFAULT_USE_COMPRESSION
 from bitcoin_nostr_chat.dialogs import create_custom_message_box
+from bitcoin_nostr_chat.nostr import GroupChat
+from bitcoin_nostr_chat.signals_min import SignalsMin
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +60,7 @@ from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox
 
 
-class Chat(QObject):
+class BaseChat(QObject):
     signal_attachement_clicked = pyqtSignal(FileObject)
     signal_add_dm_to_chat = pyqtSignal(BitcoinDM)
     signal_send_dm = pyqtSignal(BitcoinDM)
@@ -80,10 +82,6 @@ class Chat(QObject):
 
         # connect signals
         self.gui.chat_list_display.signal_attachement_clicked.connect(self.signal_attachement_clicked)
-        self.group_chat.signal_dm.connect(self.on_dm)
-
-        self.gui.signal_on_message_send.connect(self.on_send_message_in_groupchat)
-        self.gui.signal_share_filecontent.connect(self.on_share_file_in_groupchat)
         self.signal_attachement_clicked.connect(self.on_signal_attachement_clicked)
         self.gui.chat_list_display.signal_clear.connect(self.clear_chat_from_memory)
 
@@ -92,45 +90,6 @@ class Chat(QObject):
             public_key.to_bech32()
             == self.group_chat.dm_connection.async_dm_connection.keys.public_key().to_bech32()
         )
-
-    def on_dm(self, dm: BitcoinDM):
-        if not dm.author:
-            logger.debug(f"Dropping {dm}, because not author, and with that author can be determined.")
-            return
-
-        elif dm.label in [ChatLabel.GroupChat, ChatLabel.SingleRecipient]:
-            self.add_to_chat(dm)
-
-    def add_to_chat(self, dm: BitcoinDM):
-        if dm.label not in [ChatLabel.GroupChat, ChatLabel.SingleRecipient]:
-            logger.warning(f"Unrecognized dm.label {dm.label}")
-            return
-
-        if dm.author:
-            self.gui.add_dm(dm, is_me=self.is_me(dm.author))
-            self.signal_add_dm_to_chat.emit(dm)
-
-    def on_send_message_in_groupchat(self, text: str):
-        dm = BitcoinDM(
-            label=ChatLabel.GroupChat,
-            description=text,
-            event=None,
-            use_compression=self.use_compression,
-            created_at=datetime.now(),
-        )
-        self.group_chat.send(dm)
-        self.signal_send_dm.emit(dm)
-
-    def on_share_file_in_groupchat(self, file_content: str, file_name: str):
-        try:
-            dm = self._file_to_dm(file_content=file_content, label=ChatLabel.GroupChat, file_name=file_name)
-        except Exception:
-            create_custom_message_box(
-                QMessageBox.Icon.Warning, "Error", self.tr("You can only send only PSBTs or transactions")
-            )
-            return
-        self.group_chat.send(dm)
-        self.signal_send_dm.emit(dm)
 
     def _file_to_dm(self, file_content: str, label: ChatLabel, file_name: str) -> BitcoinDM:
         bitcoin_data = Data.from_str(file_content, network=self.network)
@@ -156,3 +115,58 @@ class Chat(QObject):
         for dm in self.gui.dms:
             if dm in processed_dms:
                 processed_dms.remove(dm)
+
+
+class Chat(BaseChat):
+    def __init__(
+        self,
+        network: bdk.Network,
+        group_chat: GroupChat,
+        signals_min: SignalsMin,
+        use_compression=DEFAULT_USE_COMPRESSION,
+        display_labels=[ChatLabel.GroupChat, ChatLabel.SingleRecipient],
+    ) -> None:
+        super().__init__(network, group_chat, signals_min, use_compression)
+        self.display_labels = display_labels
+
+        # signals
+        self.group_chat.signal_dm.connect(self.add_to_chat)
+
+        self.gui.signal_on_message_send.connect(self.on_send_message_in_groupchat)
+        self.gui.signal_share_filecontent.connect(self.on_share_file_in_groupchat)
+
+    def add_to_chat(self, dm: BitcoinDM):
+        if not dm.author:
+            logger.debug(
+                f"{self.__class__.__name__}: Dropping {dm}, because not author, and with that author can be determined."
+            )
+            return
+
+        if dm.label not in self.display_labels:
+            logger.warning(f"{self.__class__.__name__}:Unrecognized dm.label {dm.label}")
+            return
+
+        self.gui.add_dm(dm, is_me=self.is_me(dm.author))
+        self.signal_add_dm_to_chat.emit(dm)
+
+    def on_send_message_in_groupchat(self, text: str):
+        dm = BitcoinDM(
+            label=ChatLabel.GroupChat,
+            description=text,
+            event=None,
+            use_compression=self.use_compression,
+            created_at=datetime.now(),
+        )
+        self.group_chat.send(dm)
+        self.signal_send_dm.emit(dm)
+
+    def on_share_file_in_groupchat(self, file_content: str, file_name: str):
+        try:
+            dm = self._file_to_dm(file_content=file_content, label=ChatLabel.GroupChat, file_name=file_name)
+        except Exception:
+            create_custom_message_box(
+                QMessageBox.Icon.Warning, "Error", self.tr("You can only send only PSBTs or transactions")
+            )
+            return
+        self.group_chat.send(dm)
+        self.signal_send_dm.emit(dm)
