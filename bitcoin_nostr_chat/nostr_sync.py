@@ -33,6 +33,8 @@ from datetime import datetime
 from bitcoin_nostr_chat import DEFAULT_USE_COMPRESSION
 from bitcoin_nostr_chat.dialogs import SecretKeyDialog, create_custom_message_box
 from bitcoin_nostr_chat.label_connector import LabelConnector
+from bitcoin_nostr_chat.nostr import GroupChat, NostrProtocol
+from bitcoin_nostr_chat.signals_min import SignalsMin
 from bitcoin_nostr_chat.ui.util import short_key
 from bitcoin_nostr_chat.utils import filtered_for_init
 
@@ -87,8 +89,9 @@ def file_to_str(file_path: str):
             return f.read()
 
 
-class NostrSync(QObject):
+class BaseNostrSync(QObject):
     signal_add_trusted_device = pyqtSignal(TrustedDevice)
+    signal_remove_trusted_device = pyqtSignal(TrustedDevice)
 
     def __init__(
         self,
@@ -111,23 +114,12 @@ class NostrSync(QObject):
         self.signals_min = signals_min
         self.use_compression = use_compression
 
-        self.label_connector = LabelConnector(
-            group_chat=self.group_chat, signals_min=signals_min, debug=debug
-        )
-
-        self.chat = Chat(
-            network=network,
-            group_chat=self.group_chat,
-            signals_min=signals_min,
-            use_compression=use_compression,
-        )
         self.ui = UI(
             my_keys=self.group_chat.dm_connection.async_dm_connection.keys,
             individual_chats_visible=individual_chats_visible,
             signals_min=signals_min,
             get_relay_list=self.get_connected_relays,
         )
-        self.ui.splitter.addWidget(self.chat.gui)
 
         self.nostr_protocol.signal_dm.connect(self.on_signal_protocol_dm)
         self.group_chat.signal_dm.connect(self.on_dm)
@@ -210,7 +202,7 @@ class NostrSync(QObject):
         individual_chats_visible=True,
         use_compression=DEFAULT_USE_COMPRESSION,
         parent: QObject | None = None,
-    ) -> "NostrSync":
+    ) -> "BaseNostrSync":
         nostr_protocol = NostrProtocol(
             network=network,
             keys=protocol_keys,
@@ -225,7 +217,7 @@ class NostrSync(QObject):
             sync_start=None,
             parent=parent,
         )
-        return NostrSync(
+        return BaseNostrSync(
             network=network,
             nostr_protocol=nostr_protocol,
             group_chat=group_chat,
@@ -252,12 +244,12 @@ class NostrSync(QObject):
         d: Dict[str, Any],
         signals_min: SignalsMin,
         parent: QObject | None = None,
-    ) -> "NostrSync":
+    ) -> "BaseNostrSync":
         d["nostr_protocol"] = NostrProtocol.from_dump(d["nostr_protocol"])
         d["group_chat"] = GroupChat.from_dump(d["group_chat"])
         d["network"] = bdk.Network[d["network"]]
 
-        sync = cls(**filtered_for_init(d, NostrSync), signals_min=signals_min, parent=parent)
+        sync = cls(**filtered_for_init(d, BaseNostrSync), signals_min=signals_min, parent=parent)
 
         # add the gui elements for the trusted members
         for member in sync.group_chat.members:
@@ -374,6 +366,7 @@ class NostrSync(QObject):
         self.group_chat.remove_member(PublicKey.from_bech32(trusted_device.pub_key_bech32))
         untrusted_device = self.ui.untrust_device(trusted_device)
         self.connect_untrusted_device(untrusted_device)
+        self.signal_remove_trusted_device.emit(trusted_device)
 
     def trust_device(self, untrusted_device: UnTrustedDevice, show_message=True) -> TrustedDevice:
         device_public_key = PublicKey.from_bech32(untrusted_device.pub_key_bech32)
@@ -408,3 +401,76 @@ class NostrSync(QObject):
             recipient_public_key=device_public_key,
         )
         return trusted_device
+
+
+class NostrSync(BaseNostrSync):
+    def __init__(
+        self,
+        network: bdk.Network,
+        nostr_protocol: NostrProtocol,
+        group_chat: GroupChat,
+        signals_min: SignalsMin,
+        individual_chats_visible=True,
+        hide_data_types_in_chat: tuple[DataType] = (DataType.LabelsBip329,),
+        use_compression=DEFAULT_USE_COMPRESSION,
+        debug=False,
+        parent: QObject | None = None,
+    ) -> None:
+        super().__init__(
+            network,
+            nostr_protocol,
+            group_chat,
+            signals_min,
+            individual_chats_visible,
+            hide_data_types_in_chat,
+            use_compression,
+            debug,
+            parent,
+        )
+
+        self.label_connector = LabelConnector(
+            group_chat=self.group_chat, signals_min=signals_min, debug=debug
+        )
+
+        self.chat = Chat(
+            network=network,
+            group_chat=self.group_chat,
+            signals_min=signals_min,
+            use_compression=use_compression,
+        )
+        self.ui.tabs.addTab(self.chat.gui, self.tr("Chat"))
+
+
+class NostrSyncWithSingleChats(NostrSync):
+    def __init__(
+        self,
+        network: bdk.Network,
+        nostr_protocol: NostrProtocol,
+        group_chat: GroupChat,
+        signals_min: SignalsMin,
+        individual_chats_visible=True,
+        hide_data_types_in_chat: tuple[DataType] = (DataType.LabelsBip329,),
+        use_compression=DEFAULT_USE_COMPRESSION,
+        debug=False,
+        parent: QObject | None = None,
+    ) -> None:
+        super().__init__(
+            network,
+            nostr_protocol,
+            group_chat,
+            signals_min,
+            individual_chats_visible,
+            hide_data_types_in_chat,
+            use_compression,
+            debug,
+            parent,
+        )
+
+        self.signal_add_trusted_device.connect(self.add_chat_for_trusted_device)
+        self.signal_remove_trusted_device.connect(self.remove_chat_for_trusted_device)
+
+    def add_chat_for_trusted_device(self, trusted_device: TrustedDevice):
+        pass
+
+    def remove_chat_for_trusted_device(self, trusted_device: TrustedDevice):
+        pass

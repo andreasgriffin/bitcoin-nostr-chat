@@ -102,14 +102,12 @@ class Chat(QObject):
             self.add_to_chat(dm)
 
     def add_to_chat(self, dm: BitcoinDM):
-        if dm.label in [ChatLabel.GroupChat, ChatLabel.SingleRecipient]:
-            chat_gui = self.gui
-        else:
+        if dm.label not in [ChatLabel.GroupChat, ChatLabel.SingleRecipient]:
             logger.warning(f"Unrecognized dm.label {dm.label}")
             return
 
         if dm.author:
-            chat_gui.add_dm(dm, is_me=self.is_me(dm.author))
+            self.gui.add_dm(dm, is_me=self.is_me(dm.author))
             self.signal_add_dm_to_chat.emit(dm)
 
     def on_send_message_in_groupchat(self, text: str):

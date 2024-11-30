@@ -57,6 +57,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QTabWidget,
     QTextEdit,
     QToolButton,
     QVBoxLayout,
@@ -355,6 +356,9 @@ class UI(QtWidgets.QWidget):
         left_side = QWidget()
         left_side_layout = QVBoxLayout(left_side)
         self.splitter.addWidget(left_side)
+
+        self.tabs = QTabWidget()
+        self.splitter.addWidget(self.tabs)
 
         header = QWidget()
         header_layout = QHBoxLayout(header)
