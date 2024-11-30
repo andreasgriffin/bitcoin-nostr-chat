@@ -937,7 +937,7 @@ class DmConnection(QObject):
 
 
 class BaseProtocol(QObject):
-    signal_dm = pyqtSignal(BaseDM, Event)
+    signal_dm = pyqtSignal(BaseDM)
 
     def __init__(
         self,

@@ -87,7 +87,7 @@ class DemoApp(QMainWindow):
                 use_compression=use_compression,
             )
         self.nostr_sync.subscribe()
-        self.setCentralWidget(self.nostr_sync.gui)
+        self.setCentralWidget(self.nostr_sync.ui)
         self.setWindowTitle("Demo App")
 
     def closeEvent(self, event: Optional[QCloseEvent]) -> None:

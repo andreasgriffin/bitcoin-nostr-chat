@@ -32,7 +32,6 @@ import logging
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QSplitter, QTextEdit, QVBoxLayout, QWidget
 
-from bitcoin_nostr_chat.connected_devices.bitcoin_dm_chat_gui import BitcoinDmChatGui
 from bitcoin_nostr_chat.connected_devices.util import read_QIcon, short_key
 
 from ..html import html_f
@@ -327,7 +326,7 @@ class DeviceList(Generic[T], QtWidgets.QWidget):
         return self.scrollarea.content_widget.findChildren(self.device_class)
 
 
-class ConnectedDevices(QtWidgets.QWidget):
+class UI(QtWidgets.QWidget):
     signal_trust_device = QtCore.pyqtSignal(UnTrustedDevice)
     signal_untrust_device = QtCore.pyqtSignal(TrustedDevice)
     signal_set_keys = QtCore.pyqtSignal()
@@ -392,10 +391,7 @@ class ConnectedDevices(QtWidgets.QWidget):
         self.untrusted_devices = DeviceList(UnTrustedDevice)
         self.group_untrusted_layout.addWidget(self.untrusted_devices)
 
-        self.groupchat_gui = BitcoinDmChatGui(signals_min=self.signals_min)
-
         self.updateUi()
-        self.splitter.addWidget(self.groupchat_gui)
 
         self.signals_min.language_switch.connect(self.updateUi)
 
