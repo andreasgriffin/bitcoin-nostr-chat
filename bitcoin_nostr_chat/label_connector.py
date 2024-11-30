@@ -28,44 +28,46 @@
 
 
 import logging
-from datetime import datetime
-
-from bitcoin_nostr_chat.connected_devices.chat_gui import ChatGui, FileObject
-from bitcoin_nostr_chat.connected_devices.util import short_key
-from bitcoin_nostr_chat.nostr import BitcoinDM
-from bitcoin_nostr_chat.signals_min import SignalsMin
-
-from ..signals_min import SignalsMin
 
 logger = logging.getLogger(__name__)
 
-from collections import deque
+
+from bitcoin_qr_tools.data import Data, DataType
+from nostr_sdk import PublicKey
+from PyQt6.QtCore import QObject, pyqtSignal
+
+from .nostr import BitcoinDM, GroupChat
+from .signals_min import SignalsMin
+
+logger = logging.getLogger(__name__)
 
 
-class BitcoinDmChatGui(ChatGui):
-    def __init__(self, signals_min: SignalsMin):
-        super().__init__(signals_min)
-        self.dms: deque[BitcoinDM] = deque(maxlen=10000)
+from nostr_sdk import PublicKey
+from PyQt6.QtCore import QObject, pyqtSignal
 
-    def add_dm(self, dm: BitcoinDM, is_me: bool):
+
+class LabelConnector(QObject):
+    signal_label_bip329_received = pyqtSignal(Data, PublicKey)  # Data, Author
+
+    def __init__(
+        self,
+        group_chat: GroupChat,
+        signals_min: SignalsMin,
+        debug=False,
+    ) -> None:
+        super().__init__()
+        self.signals_min = signals_min
+        self.group_chat = group_chat
+        self.debug = debug
+
+        # connect signals
+        self.group_chat.signal_dm.connect(self.on_dm)
+
+    def on_dm(self, dm: BitcoinDM):
         if not dm.author:
+            logger.debug(f"Dropping {dm}, because not author, and with that author can be determined.")
             return
 
-        text = dm.description
-        file_object = FileObject(path=dm.description, data=dm.data) if dm.data else None
-
-        if is_me:
-            self.add_own(
-                text=text,
-                file_object=file_object,
-                created_at=dm.created_at if dm.created_at else datetime.now(),
-            )
-        else:
-            self.add_other(
-                text=text,
-                file_object=file_object,
-                other_name=short_key(dm.author.to_bech32()) if dm.author else "Unknown",
-                created_at=dm.created_at if dm.created_at else datetime.now(),
-            )
-
-        self.dms.append(dm)
+        if dm.data and dm.data.data_type == DataType.LabelsBip329:
+            # only emit a signal if I didn't send it
+            self.signal_label_bip329_received.emit(dm.data, dm.author)

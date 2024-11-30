@@ -32,7 +32,7 @@ import logging
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QSplitter, QTextEdit, QVBoxLayout, QWidget
 
-from bitcoin_nostr_chat.connected_devices.util import read_QIcon, short_key
+from bitcoin_nostr_chat.ui.util import read_QIcon, short_key
 
 from ..html import html_f
 from ..nostr import RelayList

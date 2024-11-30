@@ -31,8 +31,9 @@ import logging
 from datetime import datetime
 
 from bitcoin_nostr_chat import DEFAULT_USE_COMPRESSION
-from bitcoin_nostr_chat.connected_devices.util import short_key
 from bitcoin_nostr_chat.dialogs import SecretKeyDialog, create_custom_message_box
+from bitcoin_nostr_chat.label_connector import LabelConnector
+from bitcoin_nostr_chat.ui.util import short_key
 from bitcoin_nostr_chat.utils import filtered_for_init
 
 from .signals_min import SignalsMin
@@ -46,8 +47,7 @@ from nostr_sdk import Keys, PublicKey, SecretKey
 from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox
 
-from .connected_devices.chat import Chat, LabelConnector
-from .connected_devices.ui import UI, TrustedDevice, UnTrustedDevice
+from .chat import Chat
 from .html import html_f
 from .nostr import (
     BitcoinDM,
@@ -59,6 +59,7 @@ from .nostr import (
     RelayList,
     SecretKey,
 )
+from .ui.ui import UI, TrustedDevice, UnTrustedDevice
 
 
 def is_binary(file_path: str):

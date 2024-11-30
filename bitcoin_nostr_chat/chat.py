@@ -37,18 +37,18 @@ logger = logging.getLogger(__name__)
 
 
 import bdkpython as bdk
-from bitcoin_qr_tools.data import Data, DataType
+from bitcoin_qr_tools.data import Data
 from nostr_sdk import PublicKey
 from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox
 
 from bitcoin_nostr_chat import DEFAULT_USE_COMPRESSION
-from bitcoin_nostr_chat.connected_devices.bitcoin_dm_chat_gui import BitcoinDmChatGui
-from bitcoin_nostr_chat.connected_devices.chat_gui import FileObject
 from bitcoin_nostr_chat.dialogs import create_custom_message_box
+from bitcoin_nostr_chat.ui.bitcoin_dm_chat_gui import BitcoinDmChatGui
+from bitcoin_nostr_chat.ui.chat_gui import FileObject
 
-from ..nostr import BitcoinDM, ChatLabel, GroupChat
-from ..signals_min import SignalsMin
+from .nostr import BitcoinDM, ChatLabel, GroupChat
+from .signals_min import SignalsMin
 
 logger = logging.getLogger(__name__)
 
@@ -56,33 +56,6 @@ logger = logging.getLogger(__name__)
 from nostr_sdk import PublicKey
 from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox
-
-
-class LabelConnector(QObject):
-    signal_label_bip329_received = pyqtSignal(Data, PublicKey)  # Data, Author
-
-    def __init__(
-        self,
-        group_chat: GroupChat,
-        signals_min: SignalsMin,
-        debug=False,
-    ) -> None:
-        super().__init__()
-        self.signals_min = signals_min
-        self.group_chat = group_chat
-        self.debug = debug
-
-        # connect signals
-        self.group_chat.signal_dm.connect(self.on_dm)
-
-    def on_dm(self, dm: BitcoinDM):
-        if not dm.author:
-            logger.debug(f"Dropping {dm}, because not author, and with that author can be determined.")
-            return
-
-        if dm.data and dm.data.data_type == DataType.LabelsBip329:
-            # only emit a signal if I didn't send it
-            self.signal_label_bip329_received.emit(dm.data, dm.author)
 
 
 class Chat(QObject):

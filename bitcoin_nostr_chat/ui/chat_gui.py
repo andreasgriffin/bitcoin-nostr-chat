@@ -30,9 +30,9 @@
 import logging
 from datetime import datetime
 
-from bitcoin_nostr_chat.connected_devices.util import read_QIcon
 from bitcoin_nostr_chat.dialogs import file_to_str
 from bitcoin_nostr_chat.signals_min import SignalsMin
+from bitcoin_nostr_chat.ui.util import read_QIcon
 
 from ..signals_min import SignalsMin
 
