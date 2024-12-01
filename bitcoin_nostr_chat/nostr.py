@@ -1151,7 +1151,8 @@ class GroupChat(BaseProtocol):
             logger.debug(f"Send to {public_key.to_bech32()}")
 
         if not self.members:
-            logger.debug(f"Sending not done, since self.members is empty")
+            logger.debug(f"{self.members=}, so sending to myself only")
+            self.dm_connection.send(dm, receiver=self.my_public_key())
 
     def send(self, dm: BitcoinDM, send_also_to_me=True):
         self.send_to(dm=dm, recipients=self.members, send_also_to_me=send_also_to_me)

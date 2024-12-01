@@ -3,15 +3,18 @@ from typing import List
 
 def get_preferred_relays() -> List[str]:
     return [
-        "wss://nostr.vulpem.com",
+        "wss://nostr.btc-library.com",
+        "wss://nostr.hubmaker.io",
         "wss://relay.primal.net",
-        "wss://e.nos.lol",
         "wss://nostrue.com",
         "wss://relay.rootservers.eu",
+        "wss://nostr.schneimi.de",
+        "wss://nostr.sathoarder.com",
         "wss://bitcoiner.social",
         "wss://nostr.swiss-enigma.ch",
         "wss://nostr.blockpower.capital",
         "wss://ch.purplerelay.com",
+        "wss://relay.poster.place",
         "wss://nostr.satstralia.com",
     ]
 
