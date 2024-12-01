@@ -30,10 +30,12 @@
 import logging
 from datetime import datetime
 
-from bitcoin_nostr_chat.connected_devices.chat_gui import ChatGui, FileObject
-from bitcoin_nostr_chat.connected_devices.util import short_key
+import bdkpython as bdk
+
 from bitcoin_nostr_chat.nostr import BitcoinDM
 from bitcoin_nostr_chat.signals_min import SignalsMin
+from bitcoin_nostr_chat.ui.chat_gui import ChatGui, FileObject
+from bitcoin_nostr_chat.ui.util import short_key
 
 from ..signals_min import SignalsMin
 
@@ -53,6 +55,11 @@ class BitcoinDmChatGui(ChatGui):
 
         text = dm.description
         file_object = FileObject(path=dm.description, data=dm.data) if dm.data else None
+        if (not text) and dm.data:
+            if isinstance(dm.data.data, bdk.Transaction):
+                text = f"Tx: {dm.data.data.txid()}"
+            elif isinstance(dm.data.data, bdk.PartiallySignedTransaction):
+                text = f"PSBT: {dm.data.data.txid()}"
 
         if is_me:
             self.add_own(

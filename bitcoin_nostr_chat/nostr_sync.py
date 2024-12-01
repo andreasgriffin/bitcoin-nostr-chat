@@ -28,32 +28,28 @@
 
 
 import logging
-from collections import deque
 from datetime import datetime
 
 from bitcoin_nostr_chat import DEFAULT_USE_COMPRESSION
-from bitcoin_nostr_chat.connected_devices.util import short_key
 from bitcoin_nostr_chat.dialogs import SecretKeyDialog, create_custom_message_box
+from bitcoin_nostr_chat.label_connector import LabelConnector
+from bitcoin_nostr_chat.nostr import GroupChat, NostrProtocol
+from bitcoin_nostr_chat.signals_min import SignalsMin
+from bitcoin_nostr_chat.ui.util import short_key
 from bitcoin_nostr_chat.utils import filtered_for_init
 
 from .signals_min import SignalsMin
 
 logger = logging.getLogger(__name__)
-
 from typing import Any, Dict, Optional
 
 import bdkpython as bdk
 from bitcoin_qr_tools.data import Data, DataType
-from nostr_sdk import EventId, Keys, PublicKey, SecretKey
+from nostr_sdk import Keys, PublicKey, SecretKey
 from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox
 
-from .connected_devices.chat_gui import FileObject
-from .connected_devices.connected_devices import (
-    ConnectedDevices,
-    TrustedDevice,
-    UnTrustedDevice,
-)
+from .chat import Chat
 from .html import html_f
 from .nostr import (
     BitcoinDM,
@@ -65,6 +61,7 @@ from .nostr import (
     RelayList,
     SecretKey,
 )
+from .ui.ui import UI, TrustedDevice, UnTrustedDevice
 
 
 def is_binary(file_path: str):
@@ -92,10 +89,9 @@ def file_to_str(file_path: str):
             return f.read()
 
 
-class NostrSync(QObject):
+class BaseNostrSync(QObject):
     signal_add_trusted_device = pyqtSignal(TrustedDevice)
-    signal_attachement_clicked = pyqtSignal(FileObject)
-    signal_label_bip329_received = pyqtSignal(Data, PublicKey)  # Data, Author
+    signal_remove_trusted_device = pyqtSignal(TrustedDevice)
 
     def __init__(
         self,
@@ -118,30 +114,22 @@ class NostrSync(QObject):
         self.signals_min = signals_min
         self.use_compression = use_compression
 
-        self.gui = ConnectedDevices(
+        self.ui = UI(
             my_keys=self.group_chat.dm_connection.async_dm_connection.keys,
             individual_chats_visible=individual_chats_visible,
             signals_min=signals_min,
             get_relay_list=self.get_connected_relays,
         )
-        self.gui.groupchat_gui.chat_list_display.signal_attachement_clicked.connect(
-            self.signal_attachement_clicked
-        )
+
         self.nostr_protocol.signal_dm.connect(self.on_signal_protocol_dm)
         self.group_chat.signal_dm.connect(self.on_dm)
 
-        self.gui.signal_set_relays.connect(self.on_set_relays)
-        self.gui.groupchat_gui.signal_on_message_send.connect(self.on_send_message_in_groupchat)
-        self.gui.groupchat_gui.signal_share_filecontent.connect(self.on_share_file_in_groupchat)
-        self.gui.signal_trust_device.connect(self.on_gui_signal_trust_device)
-        self.gui.signal_untrust_device.connect(self.untrust_device)
-        self.signal_attachement_clicked.connect(self.on_signal_attachement_clicked)
-        self.gui.signal_reset_keys.connect(self.reset_own_key)
-        self.gui.signal_set_keys.connect(self.set_own_key)
-        self.gui.groupchat_gui.chat_list_display.signal_clear.connect(
-            lambda: self.on_clear_chat_from_memory(dms=self.gui.groupchat_gui.dms)
-        )
-        self.gui.signal_close_event.connect(self.stop)
+        self.ui.signal_set_relays.connect(self.on_set_relays)
+        self.ui.signal_trust_device.connect(self.on_gui_signal_trust_device)
+        self.ui.signal_untrust_device.connect(self.untrust_device)
+        self.ui.signal_reset_keys.connect(self.reset_own_key)
+        self.ui.signal_set_keys.connect(self.set_own_key)
+        self.ui.signal_close_event.connect(self.stop)
 
     def on_gui_signal_trust_device(self, untrusted_device: UnTrustedDevice):
         self.trust_device(untrusted_device=untrusted_device)
@@ -171,16 +159,7 @@ class NostrSync(QObject):
         logger.info(f"Done Setting relay_list {relay_list} ")
 
     def is_me(self, public_key: PublicKey) -> bool:
-        return (
-            public_key.to_bech32()
-            == self.group_chat.dm_connection.async_dm_connection.keys.public_key().to_bech32()
-        )
-
-    def on_clear_chat_from_memory(self, dms: deque[BitcoinDM]):
-        processed_dms = self.group_chat.dm_connection.async_dm_connection.notification_handler.processed_dms
-        for dm in dms:
-            if dm in processed_dms:
-                processed_dms.remove(dm)
+        return public_key.to_bech32() == self.group_chat.my_public_key().to_bech32()
 
     def set_own_key(self):
         nsec = SecretKeyDialog().get_secret_key()
@@ -197,13 +176,13 @@ class NostrSync(QObject):
 
     def reset_own_key(self, keys: Keys | None = None):
         self.group_chat.renew_own_key(keys=keys)
-        self.gui.set_my_keys(self.group_chat.dm_connection.async_dm_connection.keys)
+        self.ui.set_my_keys(self.group_chat.dm_connection.async_dm_connection.keys)
         self.publish_my_key_in_protocol()
 
         # ask the members to trust my new key again (they need to manually approve)
         for member in self.group_chat.members:
             self.nostr_protocol.publish_trust_me_back(
-                author_public_key=self.group_chat.dm_connection.async_dm_connection.keys.public_key(),
+                author_public_key=self.group_chat.my_public_key(),
                 recipient_public_key=member,
             )
 
@@ -220,7 +199,7 @@ class NostrSync(QObject):
         individual_chats_visible=True,
         use_compression=DEFAULT_USE_COMPRESSION,
         parent: QObject | None = None,
-    ) -> "NostrSync":
+    ):
         nostr_protocol = NostrProtocol(
             network=network,
             keys=protocol_keys,
@@ -235,7 +214,7 @@ class NostrSync(QObject):
             sync_start=None,
             parent=parent,
         )
-        return NostrSync(
+        return cls(
             network=network,
             nostr_protocol=nostr_protocol,
             group_chat=group_chat,
@@ -251,7 +230,7 @@ class NostrSync(QObject):
         # later replay (internally) protocol messages that i sent previously
         d["nostr_protocol"] = self.nostr_protocol.dump()
         d["group_chat"] = self.group_chat.dump()
-        d["individual_chats_visible"] = self.gui.individual_chats_visible
+        d["individual_chats_visible"] = self.ui.individual_chats_visible
         d["network"] = self.network.name
         d["debug"] = self.debug
         return d
@@ -262,12 +241,12 @@ class NostrSync(QObject):
         d: Dict[str, Any],
         signals_min: SignalsMin,
         parent: QObject | None = None,
-    ) -> "NostrSync":
+    ):
         d["nostr_protocol"] = NostrProtocol.from_dump(d["nostr_protocol"])
         d["group_chat"] = GroupChat.from_dump(d["group_chat"])
         d["network"] = bdk.Network[d["network"]]
 
-        sync = cls(**filtered_for_init(d, NostrSync), signals_min=signals_min, parent=parent)
+        sync = cls(**filtered_for_init(d, BaseNostrSync), signals_min=signals_min, parent=parent)
 
         # add the gui elements for the trusted members
         for member in sync.group_chat.members:
@@ -275,7 +254,7 @@ class NostrSync(QObject):
                 # do not add myself as a device
                 continue
             untrusted_device = UnTrustedDevice(pub_key_bech32=member.to_bech32(), signals_min=signals_min)
-            sync.gui.add_untrusted_device(untrusted_device)
+            sync.ui.add_untrusted_device(untrusted_device)
             sync.trust_device(untrusted_device, show_message=False)
 
         # restore/replay chat texts
@@ -292,89 +271,28 @@ class NostrSync(QObject):
         self.nostr_protocol.dm_connection.unsubscribe_all()
         self.group_chat.dm_connection.unsubscribe_all()
 
-    def on_signal_attachement_clicked(self, file_object: FileObject):
-        logger.debug(f"clicked: {file_object.__dict__}")
-
     def publish_my_key_in_protocol(self, force=False):
-        self.nostr_protocol.publish_public_key(
-            self.group_chat.dm_connection.async_dm_connection.keys.public_key(), force=force
-        )
+        self.nostr_protocol.publish_public_key(self.group_chat.my_public_key(), force=force)
 
     def on_dm(self, dm: BitcoinDM):
         if not dm.author:
             logger.debug(f"Dropping {dm}, because not author, and with that author can be determined.")
             return
 
-        if self.debug:
-            self.add_debug_to_chat(dm)
-
-        if dm.data and dm.data.data_type == DataType.LabelsBip329:
-            # only emit a signal if I didn't send it
-            self.signal_label_bip329_received.emit(dm.data, dm.author)
-
-        if dm.data and dm.data.data_type in self.hide_data_types_in_chat:
-            # do not display it in chat
-            pass
         elif dm.label == ChatLabel.DistrustMeRequest and not self.is_me(dm.author):
             self.untrust_key(dm.author)
         elif dm.label == ChatLabel.DeleteMeRequest and not self.is_me(dm.author):
             self.untrust_key(dm.author)
-            untrusted_device = self.gui.untrusted_devices.get_device(dm.author.to_bech32())
+            untrusted_device = self.ui.untrusted_devices.get_device(dm.author.to_bech32())
             if untrusted_device:
-                self.gui.untrusted_devices.remove_device(untrusted_device)
-        else:
-            self.add_to_chat(dm)
+                self.ui.untrusted_devices.remove_device(untrusted_device)
 
     def untrust_key(self, member: PublicKey):
-        trusted_device = self.gui.trusted_devices.get_device(member.to_bech32())
+        trusted_device = self.ui.trusted_devices.get_device(member.to_bech32())
         if trusted_device:
             self.untrust_device(trusted_device)
         else:
             self.group_chat.remove_member(member)
-
-    def add_debug_to_chat(self, dm: BitcoinDM):
-        chat_gui = None
-        file_object = FileObject(path=dm.description, data=dm.data) if dm.data else None
-
-        if dm.label == ChatLabel.GroupChat:
-            chat_gui = self.gui.groupchat_gui
-        elif dm.label == ChatLabel.SingleRecipient:
-            trusted_device = self.get_trusted_device_of_single_recipient_dm(dm)
-            if not trusted_device:
-                return
-            chat_gui = trusted_device.chat_gui
-        else:
-            logger.warning(f"Unrecognized dm.label {dm.label}")
-            return
-
-        if dm.author and self.is_me(dm.author):
-            chat_gui.add_own(
-                text=str(dm),
-                file_object=file_object,
-                created_at=dm.created_at if dm.created_at else datetime.now(),
-            )
-        else:
-            chat_gui.add_other(
-                text=str(dm),
-                file_object=file_object,
-                other_name=short_key(dm.author.to_bech32()) if dm.author else "Unknown",
-                created_at=dm.created_at if dm.created_at else datetime.now(),
-            )
-
-    def add_to_chat(self, dm: BitcoinDM):
-        if dm.label == ChatLabel.GroupChat:
-            chat_gui = self.gui.groupchat_gui
-        elif dm.label == ChatLabel.SingleRecipient:
-            trusted_device = self.get_trusted_device_of_single_recipient_dm(dm)
-            if not trusted_device:
-                return
-            chat_gui = trusted_device.chat_gui
-        else:
-            logger.warning(f"Unrecognized dm.label {dm.label}")
-            return
-
-        if dm.author:
-            chat_gui.add_dm(dm, is_me=self.is_me(dm.author))
 
     def get_singlechat_counterparty(self, dm: BitcoinDM) -> Optional[str]:
         if dm.label != ChatLabel.SingleRecipient:
@@ -396,19 +314,8 @@ class NostrSync(QObject):
     def get_trusted_device_of_single_recipient_dm(self, dm: BitcoinDM) -> Optional[TrustedDevice]:
         counterparty_public_key = self.get_singlechat_counterparty(dm)
         if counterparty_public_key:
-            return self.gui.trusted_devices.get_device(counterparty_public_key)
+            return self.ui.trusted_devices.get_device(counterparty_public_key)
         return None
-
-    def on_send_message_in_groupchat(self, text: str):
-        self.group_chat.send(
-            BitcoinDM(
-                label=ChatLabel.GroupChat,
-                description=text,
-                event=None,
-                use_compression=self.use_compression,
-                created_at=datetime.now(),
-            )
-        )
 
     def file_to_dm(self, file_content: str, label: ChatLabel, file_name: str) -> BitcoinDM:
         bitcoin_data = Data.from_str(file_content, network=self.network)
@@ -426,16 +333,6 @@ class NostrSync(QObject):
         )
         return dm
 
-    def on_share_file_in_groupchat(self, file_content: str, file_name: str):
-        try:
-            dm = self.file_to_dm(file_content=file_content, label=ChatLabel.GroupChat, file_name=file_name)
-        except Exception:
-            create_custom_message_box(
-                QMessageBox.Icon.Warning, "Error", self.tr("You can only send only PSBTs or transactions")
-            )
-            return
-        self.group_chat.send(dm)
-
     def connect_untrusted_device(self, untrusted_device: UnTrustedDevice):
         if untrusted_device.pub_key_bech32 in [k.to_bech32() for k in self.group_chat.members]:
             self.trust_device(untrusted_device, show_message=False)
@@ -446,13 +343,13 @@ class NostrSync(QObject):
             return
 
         untrusted_device = UnTrustedDevice(pub_key_bech32=dm.public_key_bech32, signals_min=self.signals_min)
-        success = self.gui.add_untrusted_device(untrusted_device)
+        success = self.ui.add_untrusted_device(untrusted_device)
         if success:
             self.connect_untrusted_device(untrusted_device)
 
         if dm.please_trust_public_key_bech32:
             # the message is a request to trust the author
-            untrusted_device2 = self.gui.untrusted_devices.get_device(dm.public_key_bech32)
+            untrusted_device2 = self.ui.untrusted_devices.get_device(dm.public_key_bech32)
             if not isinstance(untrusted_device2, UnTrustedDevice):
                 return
             if not untrusted_device2:
@@ -462,85 +359,28 @@ class NostrSync(QObject):
 
     def untrust_device(self, trusted_device: TrustedDevice):
         self.group_chat.remove_member(PublicKey.from_bech32(trusted_device.pub_key_bech32))
-        processed_dms = self.group_chat.dm_connection.async_dm_connection.notification_handler.processed_dms
-        for dm in trusted_device.chat_gui.dms:
-            if dm in processed_dms:
-                processed_dms.remove(dm)
-            if dm.event:
-                self.group_chat.dm_connection.async_dm_connection.notification_handler.untrusted_events.append(
-                    dm.event
-                )
-        untrusted_device = self.gui.untrust_device(trusted_device)
+        untrusted_device = self.ui.untrust_device(trusted_device)
         self.connect_untrusted_device(untrusted_device)
+        self.signal_remove_trusted_device.emit(trusted_device)
 
     def trust_device(self, untrusted_device: UnTrustedDevice, show_message=True) -> TrustedDevice:
         device_public_key = PublicKey.from_bech32(untrusted_device.pub_key_bech32)
         self.group_chat.add_member(device_public_key)
-
-        def send_copy_to_myself(dm: BitcoinDM, receiver: PublicKey, send_to_other_event_id: EventId):
-            logger.debug(
-                f"Successfully sent to {receiver.to_bech32()} (eventid = {send_to_other_event_id}) and now send copy to myself"
-            )
-            copy_dm = BitcoinDM.from_dump(dm.dump(), network=self.network)
-            copy_dm.event = None
-            copy_dm.intended_recipient = untrusted_device.pub_key_bech32
-            self.group_chat.dm_connection.send(
-                copy_dm, receiver=self.group_chat.dm_connection.async_dm_connection.keys.public_key()
-            )
-
-        def callback_on_message_send(text: str):
-            dm = BitcoinDM(
-                event=None,
-                label=ChatLabel.SingleRecipient,
-                description=text,
-                use_compression=self.use_compression,
-                created_at=datetime.now(),
-            )
-            receiver = PublicKey.from_bech32(untrusted_device.pub_key_bech32)
-            self.group_chat.dm_connection.send(
-                dm, receiver=receiver, on_done=lambda event_id: send_copy_to_myself(dm, receiver, event_id)
-            )
-
-        def callback_share_file(file_content: str, file_name: str):
-            try:
-                dm = self.file_to_dm(
-                    file_content=file_content, label=ChatLabel.SingleRecipient, file_name=file_name
-                )
-            except Exception:
-                create_custom_message_box(
-                    QMessageBox.Icon.Warning,
-                    self.tr("Error"),
-                    self.tr("{file_name} could not be recognized as Bitcoin data").format(
-                        file_name=file_name
-                    ),
-                )
-                return
-            receiver = PublicKey.from_bech32(untrusted_device.pub_key_bech32)
-            self.group_chat.dm_connection.send(
-                dm, receiver=receiver, on_done=lambda event_id: send_copy_to_myself(dm, receiver, event_id)
-            )
-
-        trusted_device = self.gui.trust_device(
+        trusted_device = self.ui.trust_device(
             untrusted_device,
-            callback_attachement_clicked=self.signal_attachement_clicked.emit,
-            callback_on_message_send=callback_on_message_send,
-            callback_share_filepath=callback_share_file,
-            callback_clear_chat=self.on_clear_chat_from_memory,
         )
 
         assert trusted_device.pub_key_bech32 == untrusted_device.pub_key_bech32
 
         if show_message and not untrusted_device.trust_request_active():
             QMessageBox.information(
-                self.gui,
+                self.ui,
                 self.tr("Go to {untrusted}").format(untrusted=short_key(untrusted_device.pub_key_bech32)),
                 self.tr(
                     "To complete the connection, accept my {id} request on the other device {other}."
                 ).format(
                     id=html_f(
-                        short_key(
-                            self.group_chat.dm_connection.async_dm_connection.keys.public_key().to_bech32()
-                        ),
+                        short_key(self.group_chat.my_public_key().to_bech32()),
                         bf=True,
                     ),
                     other=html_f(short_key(untrusted_device.pub_key_bech32), bf=True),
@@ -550,7 +390,116 @@ class NostrSync(QObject):
         self.signal_add_trusted_device.emit(trusted_device)
 
         self.nostr_protocol.publish_trust_me_back(
-            author_public_key=self.group_chat.dm_connection.async_dm_connection.keys.public_key(),
+            author_public_key=self.group_chat.my_public_key(),
             recipient_public_key=device_public_key,
         )
         return trusted_device
+
+
+class NostrSync(BaseNostrSync):
+    def __init__(
+        self,
+        network: bdk.Network,
+        nostr_protocol: NostrProtocol,
+        group_chat: GroupChat,
+        signals_min: SignalsMin,
+        individual_chats_visible=True,
+        hide_data_types_in_chat: tuple[DataType] = (DataType.LabelsBip329,),
+        use_compression=DEFAULT_USE_COMPRESSION,
+        debug=False,
+        parent: QObject | None = None,
+    ) -> None:
+        super().__init__(
+            network,
+            nostr_protocol,
+            group_chat,
+            signals_min,
+            individual_chats_visible,
+            hide_data_types_in_chat,
+            use_compression,
+            debug,
+            parent,
+        )
+
+        self.label_connector = LabelConnector(
+            group_chat=self.group_chat, signals_min=signals_min, debug=debug
+        )
+
+        self.chat = Chat(
+            network=network,
+            group_chat=self.group_chat,
+            signals_min=signals_min,
+            use_compression=use_compression,
+            display_labels=[ChatLabel.GroupChat, ChatLabel.SingleRecipient],
+            send_label=ChatLabel.GroupChat,
+        )
+        self.ui.tabs.addTab(self.chat.gui, self.tr("Group Chat"))
+
+
+class NostrSyncWithSingleChats(BaseNostrSync):
+    def __init__(
+        self,
+        network: bdk.Network,
+        nostr_protocol: NostrProtocol,
+        group_chat: GroupChat,
+        signals_min: SignalsMin,
+        individual_chats_visible=True,
+        hide_data_types_in_chat: tuple[DataType] = (DataType.LabelsBip329,),
+        use_compression=DEFAULT_USE_COMPRESSION,
+        debug=False,
+        parent: QObject | None = None,
+    ) -> None:
+        super().__init__(
+            network,
+            nostr_protocol,
+            group_chat,
+            signals_min,
+            individual_chats_visible,
+            hide_data_types_in_chat,
+            use_compression,
+            debug,
+            parent,
+        )
+
+        self.label_connector = LabelConnector(
+            group_chat=self.group_chat, signals_min=signals_min, debug=debug
+        )
+
+        self.chat = Chat(
+            network=network,
+            group_chat=self.group_chat,
+            signals_min=signals_min,
+            use_compression=use_compression,
+            display_labels=[ChatLabel.GroupChat],
+            send_label=ChatLabel.GroupChat,
+        )
+        self.ui.tabs.addTab(self.chat.gui, self.tr("Chat"))
+
+        self.chats: Dict[str, Chat] = {}
+
+        self.signal_add_trusted_device.connect(self.add_chat_for_trusted_device)
+        self.signal_remove_trusted_device.connect(self.remove_chat_for_trusted_device)
+
+    def add_chat_for_trusted_device(self, trusted_device: TrustedDevice):
+        chat = Chat(
+            network=self.network,
+            group_chat=self.group_chat,
+            signals_min=self.signals_min,
+            use_compression=self.use_compression,
+            restrict_to_counterparties=[PublicKey.from_bech32(trusted_device.pub_key_bech32)],
+            display_labels=[ChatLabel.SingleRecipient],
+            send_label=ChatLabel.SingleRecipient,
+        )
+        self.chats[trusted_device.pub_key_bech32] = chat
+        self.ui.tabs.addTab(chat.gui, short_key(trusted_device.pub_key_bech32))
+
+    def remove_chat_for_trusted_device(self, trusted_device: TrustedDevice):
+        if trusted_device.pub_key_bech32 not in self.chats:
+            return
+        chat = self.chats[trusted_device.pub_key_bech32]
+
+        index = self.ui.tabs.indexOf(chat.gui)
+        if index >= 0:
+            self.ui.tabs.removeTab(index)
+
+        del self.chats[trusted_device.pub_key_bech32]

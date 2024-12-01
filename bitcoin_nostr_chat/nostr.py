@@ -168,17 +168,17 @@ class RelayList:
         preferred_relays = get_preferred_relays()
         return preferred_relays + [r for r in relays if r not in preferred_relays]
 
-    @classmethod
-    def get_relays_from_nostr_watch(cls, nips: List[int] = [17, 4]) -> List[str]:
-        all_relays: List[str] = []
-        for nip in nips:
-            url = f"https://api.nostr.watch/v1/nip/{nip}"
-            result = fetch_and_parse_json(url)
-            logger.debug(f"fetch_and_parse_json  {url} returned {result}")
-            if result:
-                all_relays += result
+    # @classmethod
+    # def get_relays_from_nostr_watch(cls, nips: List[int] = [17, 4]) -> List[str]:
+    #     all_relays: List[str] = []
+    #     for nip in nips:
+    #         url = f"https://api.nostr.watch/v1/nip/{nip}"
+    #         result = fetch_and_parse_json(url)
+    #         logger.debug(f"fetch_and_parse_json  {url} returned {result}")
+    #         if result:
+    #             all_relays += result
 
-        return all_relays
+    #     return all_relays
 
     @classmethod
     def get_relays(cls, nips: List[int] = [17, 4]) -> List[str]:
@@ -937,7 +937,7 @@ class DmConnection(QObject):
 
 
 class BaseProtocol(QObject):
-    signal_dm = pyqtSignal(BaseDM, Event)
+    signal_dm = pyqtSignal(BaseDM)
 
     def __init__(
         self,
@@ -971,6 +971,9 @@ class BaseProtocol(QObject):
                 parent=self,
             )
         )
+
+    def my_public_key(self) -> PublicKey:
+        return self.dm_connection.async_dm_connection.keys.public_key()
 
     @abstractmethod
     def subscribe(self):
@@ -1024,7 +1027,7 @@ class NostrProtocol(BaseProtocol):
         self.use_compression = use_compression
 
     def get_currently_allowed(self) -> Set[str]:
-        return set([self.dm_connection.async_dm_connection.keys.public_key().to_bech32()])
+        return set([self.my_public_key().to_bech32()])
 
     def from_serialized(self, base64_encoded_data) -> ProtocolDM:
         return ProtocolDM.from_serialized(base64_encoded_data=base64_encoded_data, network=self.network)
@@ -1033,9 +1036,7 @@ class NostrProtocol(BaseProtocol):
         pass
 
     def publish_public_key(self, author_public_key: PublicKey, force=False):
-        logger.debug(
-            f"starting publish_public_key {self.dm_connection.async_dm_connection.keys.public_key().to_bech32()}"
-        )
+        logger.debug(f"starting publish_public_key {self.my_public_key().to_bech32()}")
         if not force and self.dm_connection.async_dm_connection.public_key_was_published(author_public_key):
             logger.debug(f"{author_public_key.to_bech32()} was published already. No need to do it again")
             return
@@ -1045,10 +1046,8 @@ class NostrProtocol(BaseProtocol):
             use_compression=self.use_compression,
             created_at=datetime.now(),
         )
-        self.dm_connection.send(dm, self.dm_connection.async_dm_connection.keys.public_key())
-        logger.debug(
-            f"done publish_public_key {self.dm_connection.async_dm_connection.keys.public_key().to_bech32()}"
-        )
+        self.dm_connection.send(dm, self.my_public_key())
+        logger.debug(f"done publish_public_key {self.my_public_key().to_bech32()}")
 
     def publish_trust_me_back(self, author_public_key: PublicKey, recipient_public_key: PublicKey):
         dm = ProtocolDM(
@@ -1058,7 +1057,7 @@ class NostrProtocol(BaseProtocol):
             use_compression=self.use_compression,
             created_at=datetime.now(),
         )
-        self.dm_connection.send(dm, self.dm_connection.async_dm_connection.keys.public_key())
+        self.dm_connection.send(dm, self.my_public_key())
 
     def subscribe(self):
         def on_done(subscription_id: str):
@@ -1139,10 +1138,10 @@ class GroupChat(BaseProtocol):
         )
         copy_dm = BitcoinDM.from_dump(dm.dump(), network=self.network)
         copy_dm.event = None
-        self.dm_connection.send(copy_dm, receiver=self.dm_connection.async_dm_connection.keys.public_key())
+        self.dm_connection.send(copy_dm, receiver=self.my_public_key())
 
-    def send(self, dm: BitcoinDM, send_also_to_me=True):
-        for public_key in self.members:
+    def send_to(self, dm: BitcoinDM, recipients: List[PublicKey], send_also_to_me=True):
+        for public_key in recipients:
             on_done = None
             if send_also_to_me and public_key == self.members[-1]:
                 # for the last recipient, make a callback to send a copy to myself
@@ -1152,10 +1151,14 @@ class GroupChat(BaseProtocol):
             logger.debug(f"Send to {public_key.to_bech32()}")
 
         if not self.members:
-            logger.debug(f"Sending not done, since self.members is empty")
+            logger.debug(f"{self.members=}, so sending to myself only")
+            self.dm_connection.send(dm, receiver=self.my_public_key())
+
+    def send(self, dm: BitcoinDM, send_also_to_me=True):
+        self.send_to(dm=dm, recipients=self.members, send_also_to_me=send_also_to_me)
 
     def members_including_me(self):
-        return self.members + [self.dm_connection.async_dm_connection.keys.public_key()]
+        return self.members + [self.my_public_key()]
 
     def subscribe(self):
         def on_done(subscription_id: str):

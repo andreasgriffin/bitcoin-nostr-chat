@@ -13,7 +13,7 @@ import bdkpython as bdk
 from nostr_sdk import Keys, SecretKey
 from PyQt6.QtGui import QCloseEvent
 
-from bitcoin_nostr_chat.nostr_sync import NostrSync
+from bitcoin_nostr_chat.nostr_sync import NostrSyncWithSingleChats
 from bitcoin_nostr_chat.signals_min import SignalsMin
 
 logger = logging.getLogger(__name__)  # Getting the root logger
@@ -72,14 +72,14 @@ class DemoApp(QMainWindow):
 
         d = load_dict_from_file(file_name)
         if d:
-            self.nostr_sync = NostrSync.from_dump(d, signals_min=signals_min)
+            self.nostr_sync = NostrSyncWithSingleChats.from_dump(d, signals_min=signals_min)
         else:
 
             keys = Keys(
                 secret_key=SecretKey.from_hex(hashlib.sha256(protcol_secret_str.encode("utf-8")).hexdigest())
             )
 
-            self.nostr_sync = NostrSync.from_keys(
+            self.nostr_sync = NostrSyncWithSingleChats.from_keys(
                 network=bdk.Network.REGTEST,
                 protocol_keys=keys,
                 device_keys=Keys.generate(),
@@ -87,7 +87,7 @@ class DemoApp(QMainWindow):
                 use_compression=use_compression,
             )
         self.nostr_sync.subscribe()
-        self.setCentralWidget(self.nostr_sync.gui)
+        self.setCentralWidget(self.nostr_sync.ui)
         self.setWindowTitle("Demo App")
 
     def closeEvent(self, event: Optional[QCloseEvent]) -> None:
