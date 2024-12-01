@@ -168,17 +168,17 @@ class RelayList:
         preferred_relays = get_preferred_relays()
         return preferred_relays + [r for r in relays if r not in preferred_relays]
 
-    @classmethod
-    def get_relays_from_nostr_watch(cls, nips: List[int] = [17, 4]) -> List[str]:
-        all_relays: List[str] = []
-        for nip in nips:
-            url = f"https://api.nostr.watch/v1/nip/{nip}"
-            result = fetch_and_parse_json(url)
-            logger.debug(f"fetch_and_parse_json  {url} returned {result}")
-            if result:
-                all_relays += result
+    # @classmethod
+    # def get_relays_from_nostr_watch(cls, nips: List[int] = [17, 4]) -> List[str]:
+    #     all_relays: List[str] = []
+    #     for nip in nips:
+    #         url = f"https://api.nostr.watch/v1/nip/{nip}"
+    #         result = fetch_and_parse_json(url)
+    #         logger.debug(f"fetch_and_parse_json  {url} returned {result}")
+    #         if result:
+    #             all_relays += result
 
-        return all_relays
+    #     return all_relays
 
     @classmethod
     def get_relays(cls, nips: List[int] = [17, 4]) -> List[str]:

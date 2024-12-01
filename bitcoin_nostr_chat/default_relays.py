@@ -3,23 +3,16 @@ from typing import List
 
 def get_preferred_relays() -> List[str]:
     return [
-        "wss://atlas.nostr.land/",
-        "wss://eden.nostr.land/",
-        "wss://relay.nostr.nu/",
-        "wss://nostr.noones.com/",
+        "wss://nostr-pub.wellorder.net",
         "wss://nostr.roundrockbitcoiners.com/",
-        "wss://relay.orange-crush.com/",
         "wss://nostr.bitcoiner.social/",
-        "wss://relay.snort.social/",
+        "wss://relay.damus.io",
+        "wss://nostr.mom",
     ]
 
 
 def get_default_delays() -> List[str]:
     return [
-        "wss://relay.damus.io",
-        "wss://nostr-pub.wellorder.net",
-        "wss://nostr.mom",
-        "wss://nostr.slothy.win",
         "wss://relay.stoner.com",
         "wss://nostr.einundzwanzig.space",
         "wss://nos.lol",
