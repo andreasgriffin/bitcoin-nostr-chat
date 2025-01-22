@@ -29,21 +29,14 @@
 
 import logging
 
-logger = logging.getLogger(__name__)
-
-
 from bitcoin_qr_tools.data import Data, DataType
 from nostr_sdk import PublicKey
 from PyQt6.QtCore import QObject, pyqtSignal
 
-from .nostr import BitcoinDM, GroupChat
+from .group_chat import BitcoinDM, GroupChat
 from .signals_min import SignalsMin
 
 logger = logging.getLogger(__name__)
-
-
-from nostr_sdk import PublicKey
-from PyQt6.QtCore import QObject, pyqtSignal
 
 
 class LabelConnector(QObject):

@@ -76,7 +76,7 @@ class DemoApp(QMainWindow):
         else:
 
             keys = Keys(
-                secret_key=SecretKey.from_hex(hashlib.sha256(protcol_secret_str.encode("utf-8")).hexdigest())
+                secret_key=SecretKey.parse(hashlib.sha256(protcol_secret_str.encode("utf-8")).hexdigest())
             )
 
             self.nostr_sync = NostrSyncWithSingleChats.from_keys(

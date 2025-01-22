@@ -31,14 +31,6 @@ import logging
 from datetime import datetime
 from typing import List
 
-from bitcoin_nostr_chat import DEFAULT_USE_COMPRESSION
-from bitcoin_nostr_chat.dialogs import create_custom_message_box
-from bitcoin_nostr_chat.nostr import GroupChat
-from bitcoin_nostr_chat.signals_min import SignalsMin
-
-logger = logging.getLogger(__name__)
-
-
 import bdkpython as bdk
 from bitcoin_qr_tools.data import Data, DataType
 from nostr_sdk import PublicKey
@@ -46,19 +38,18 @@ from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox
 
 from bitcoin_nostr_chat import DEFAULT_USE_COMPRESSION
+from bitcoin_nostr_chat.bitcoin_dm import ChatLabel
 from bitcoin_nostr_chat.dialogs import create_custom_message_box
+from bitcoin_nostr_chat.group_chat import GroupChat
+from bitcoin_nostr_chat.signals_min import SignalsMin
 from bitcoin_nostr_chat.ui.bitcoin_dm_chat_gui import BitcoinDmChatGui
 from bitcoin_nostr_chat.ui.chat_gui import FileObject
+from bitcoin_nostr_chat.ui.util import chat_color
 
-from .nostr import BitcoinDM, ChatLabel, GroupChat
+from .group_chat import BitcoinDM, GroupChat
 from .signals_min import SignalsMin
 
 logger = logging.getLogger(__name__)
-
-
-from nostr_sdk import PublicKey
-from PyQt6.QtCore import QObject, pyqtSignal
-from PyQt6.QtWidgets import QMessageBox
 
 
 class BaseChat(QObject):
@@ -151,7 +142,11 @@ class Chat(BaseChat):
         if dm.data and dm.data.data_type not in self.display_file_types:
             return
 
-        self.gui.add_dm(dm, is_me=self.is_me(dm.author))
+        self.gui.add_dm(
+            dm,
+            is_me=self.is_me(dm.author),
+            color=chat_color(dm.author.to_bech32()),
+        )
         self.signal_add_dm_to_chat.emit(dm)
 
     def _send(self, dm: BitcoinDM):

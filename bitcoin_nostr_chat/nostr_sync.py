@@ -29,18 +29,6 @@
 
 import logging
 from datetime import datetime
-
-from bitcoin_nostr_chat import DEFAULT_USE_COMPRESSION
-from bitcoin_nostr_chat.dialogs import SecretKeyDialog, create_custom_message_box
-from bitcoin_nostr_chat.label_connector import LabelConnector
-from bitcoin_nostr_chat.nostr import GroupChat, NostrProtocol
-from bitcoin_nostr_chat.signals_min import SignalsMin
-from bitcoin_nostr_chat.ui.util import short_key
-from bitcoin_nostr_chat.utils import filtered_for_init
-
-from .signals_min import SignalsMin
-
-logger = logging.getLogger(__name__)
 from typing import Any, Dict, Optional
 
 import bdkpython as bdk
@@ -49,19 +37,25 @@ from nostr_sdk import Keys, PublicKey, SecretKey
 from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox
 
+from bitcoin_nostr_chat import DEFAULT_USE_COMPRESSION
+from bitcoin_nostr_chat.bitcoin_dm import BitcoinDM, ChatLabel
+from bitcoin_nostr_chat.dialogs import SecretKeyDialog, create_custom_message_box
+from bitcoin_nostr_chat.group_chat import GroupChat, NostrProtocol
+from bitcoin_nostr_chat.label_connector import LabelConnector
+from bitcoin_nostr_chat.protocol_dm import ProtocolDM
+from bitcoin_nostr_chat.relay_list import RelayList
+from bitcoin_nostr_chat.signals_min import SignalsMin
+from bitcoin_nostr_chat.ui.device_manager import TrustedDeviceItem, UntrustedDeviceItem
+from bitcoin_nostr_chat.ui.util import short_key
+from bitcoin_nostr_chat.utils import filtered_for_init
+
 from .chat import Chat
+from .group_chat import GroupChat, Keys
 from .html import html_f
-from .nostr import (
-    BitcoinDM,
-    ChatLabel,
-    GroupChat,
-    Keys,
-    NostrProtocol,
-    ProtocolDM,
-    RelayList,
-    SecretKey,
-)
-from .ui.ui import UI, TrustedDevice, UnTrustedDevice
+from .signals_min import SignalsMin
+from .ui.ui import UI
+
+logger = logging.getLogger(__name__)
 
 
 def is_binary(file_path: str):
@@ -90,8 +84,9 @@ def file_to_str(file_path: str):
 
 
 class BaseNostrSync(QObject):
-    signal_add_trusted_device = pyqtSignal(TrustedDevice)
-    signal_remove_trusted_device = pyqtSignal(TrustedDevice)
+
+    signal_remove_trusted_device = pyqtSignal(str)
+    signal_add_trusted_device = pyqtSignal(str)
 
     def __init__(
         self,
@@ -118,38 +113,32 @@ class BaseNostrSync(QObject):
             my_keys=self.group_chat.dm_connection.async_dm_connection.keys,
             individual_chats_visible=individual_chats_visible,
             signals_min=signals_min,
-            get_relay_list=self.get_connected_relays,
+            get_relay_list=self.group_chat.dm_connection.get_connected_relays,
         )
 
         self.nostr_protocol.signal_dm.connect(self.on_signal_protocol_dm)
         self.group_chat.signal_dm.connect(self.on_dm)
 
         self.ui.signal_set_relays.connect(self.on_set_relays)
-        self.ui.signal_trust_device.connect(self.on_gui_signal_trust_device)
-        self.ui.signal_untrust_device.connect(self.untrust_device)
+        self.ui.device_manager.untrusted.signal_trust_device.connect(self.on_gui_signal_trust_device)
+        self.ui.device_manager.trusted.signal_untrust_device.connect(self.untrust_device)
         self.ui.signal_reset_keys.connect(self.reset_own_key)
         self.ui.signal_set_keys.connect(self.set_own_key)
         self.ui.signal_close_event.connect(self.stop)
 
-    def on_gui_signal_trust_device(self, untrusted_device: UnTrustedDevice):
-        self.trust_device(untrusted_device=untrusted_device)
+    def on_gui_signal_trust_device(self, pub_key_bech32: str):
+        self.trust_device(pub_key_bech32=pub_key_bech32)
         # the trusted device maybe has sent messages already
         # and we have received a message, but did not trust the author
         # and therefore dismised the message.
         # Here we resubscribe, to get all the messages again
-        self.group_chat.dm_connection.run(
-            self.group_chat.dm_connection.async_dm_connection.notification_handler.replay_untrusted_events()
+        self.group_chat.dm_connection.queue_coroutine(
+            self.group_chat.dm_connection.async_dm_connection.notification_handler.replay_untrusted_events
         )
 
     def stop(self):
         self.group_chat.dm_connection.stop()
         self.nostr_protocol.dm_connection.stop()
-
-    def get_connected_relays(self) -> RelayList:
-        return RelayList(
-            relays=[relay.url() for relay in self.group_chat.dm_connection.get_connected_relays()],
-            last_updated=datetime.now(),
-        )
 
     def on_set_relays(self, relay_list: RelayList):
         logger.info(f"Setting relay_list {relay_list} ")
@@ -166,7 +155,7 @@ class BaseNostrSync(QObject):
         if not nsec:
             return
         try:
-            keys = Keys(SecretKey.from_bech32(nsec))
+            keys = Keys(SecretKey.parse(nsec))
             self.reset_own_key(keys=keys)
         except:
             create_custom_message_box(
@@ -185,9 +174,6 @@ class BaseNostrSync(QObject):
                 author_public_key=self.group_chat.my_public_key(),
                 recipient_public_key=member,
             )
-
-        # to receive old messages
-        self.group_chat.refresh_dm_connection()
 
     @classmethod
     def from_keys(
@@ -253,9 +239,7 @@ class BaseNostrSync(QObject):
             if sync.is_me(member):
                 # do not add myself as a device
                 continue
-            untrusted_device = UnTrustedDevice(pub_key_bech32=member.to_bech32(), signals_min=signals_min)
-            sync.ui.add_untrusted_device(untrusted_device)
-            sync.trust_device(untrusted_device, show_message=False)
+            sync.ui.device_manager.trusted.add_list_item(TrustedDeviceItem(pub_key_bech32=member.to_bech32()))
 
         # restore/replay chat texts
         sync.nostr_protocol.dm_connection.replay_events_from_dump()
@@ -283,16 +267,11 @@ class BaseNostrSync(QObject):
             self.untrust_key(dm.author)
         elif dm.label == ChatLabel.DeleteMeRequest and not self.is_me(dm.author):
             self.untrust_key(dm.author)
-            untrusted_device = self.ui.untrusted_devices.get_device(dm.author.to_bech32())
-            if untrusted_device:
-                self.ui.untrusted_devices.remove_device(untrusted_device)
+            self.ui.device_manager.remove_from_all(dm.author.to_bech32())
 
     def untrust_key(self, member: PublicKey):
-        trusted_device = self.ui.trusted_devices.get_device(member.to_bech32())
-        if trusted_device:
-            self.untrust_device(trusted_device)
-        else:
-            self.group_chat.remove_member(member)
+        self.ui.device_manager.untrust(member.to_bech32())
+        self.group_chat.remove_member(member)
 
     def get_singlechat_counterparty(self, dm: BitcoinDM) -> Optional[str]:
         if dm.label != ChatLabel.SingleRecipient:
@@ -311,12 +290,6 @@ class BaseNostrSync(QObject):
         else:
             return dm.author.to_bech32()
 
-    def get_trusted_device_of_single_recipient_dm(self, dm: BitcoinDM) -> Optional[TrustedDevice]:
-        counterparty_public_key = self.get_singlechat_counterparty(dm)
-        if counterparty_public_key:
-            return self.ui.trusted_devices.get_device(counterparty_public_key)
-        return None
-
     def file_to_dm(self, file_content: str, label: ChatLabel, file_name: str) -> BitcoinDM:
         bitcoin_data = Data.from_str(file_content, network=self.network)
         if not bitcoin_data:
@@ -333,46 +306,42 @@ class BaseNostrSync(QObject):
         )
         return dm
 
-    def connect_untrusted_device(self, untrusted_device: UnTrustedDevice):
-        if untrusted_device.pub_key_bech32 in [k.to_bech32() for k in self.group_chat.members]:
-            self.trust_device(untrusted_device, show_message=False)
-
     def on_signal_protocol_dm(self, dm: ProtocolDM):
-        if self.is_me(PublicKey.from_bech32(dm.public_key_bech32)):
+        if self.is_me(PublicKey.parse(dm.public_key_bech32)):
             # if I'm the autor do noting
             return
+        if self.ui.device_manager.trusted.get_device(dm.public_key_bech32):
+            return
 
-        untrusted_device = UnTrustedDevice(pub_key_bech32=dm.public_key_bech32, signals_min=self.signals_min)
-        success = self.ui.add_untrusted_device(untrusted_device)
-        if success:
-            self.connect_untrusted_device(untrusted_device)
+        self.ui.device_manager.untrusted.add_list_item(
+            UntrustedDeviceItem(
+                pub_key_bech32=dm.public_key_bech32,
+            )
+        )
 
         if dm.please_trust_public_key_bech32:
             # the message is a request to trust the author
-            untrusted_device2 = self.ui.untrusted_devices.get_device(dm.public_key_bech32)
-            if not isinstance(untrusted_device2, UnTrustedDevice):
-                return
-            if not untrusted_device2:
+            untrusted_device = self.ui.device_manager.untrusted.get_device(dm.public_key_bech32)
+            if not untrusted_device:
                 logger.warning(f"For {dm.public_key_bech32} could not be found an untrusted device")
                 return
-            untrusted_device2.set_button_status_to_accept()
+            untrusted_device.set_button_status_to_accept()
 
-    def untrust_device(self, trusted_device: TrustedDevice):
-        self.group_chat.remove_member(PublicKey.from_bech32(trusted_device.pub_key_bech32))
-        untrusted_device = self.ui.untrust_device(trusted_device)
-        self.connect_untrusted_device(untrusted_device)
-        self.signal_remove_trusted_device.emit(trusted_device)
+    def untrust_device(self, pub_key_bech32: str):
+        self.group_chat.remove_member(PublicKey.parse(pub_key_bech32))
+        self.ui.device_manager.untrust(pub_key_bech32=pub_key_bech32)
 
-    def trust_device(self, untrusted_device: UnTrustedDevice, show_message=True) -> TrustedDevice:
-        device_public_key = PublicKey.from_bech32(untrusted_device.pub_key_bech32)
+        self.signal_remove_trusted_device.emit(pub_key_bech32)
+
+    def trust_device(self, pub_key_bech32: str, show_message=True):
+        device_public_key = PublicKey.parse(pub_key_bech32)
         self.group_chat.add_member(device_public_key)
-        trusted_device = self.ui.trust_device(
-            untrusted_device,
-        )
 
-        assert trusted_device.pub_key_bech32 == untrusted_device.pub_key_bech32
+        untrusted_device = self.ui.device_manager.untrusted.get_device(pub_key_bech32)
+        self.ui.device_manager.untrusted.remove(pub_key_bech32=pub_key_bech32)
+        self.ui.device_manager.trusted.add_list_item(TrustedDeviceItem(pub_key_bech32=pub_key_bech32))
 
-        if show_message and not untrusted_device.trust_request_active():
+        if show_message and untrusted_device and not untrusted_device.trust_request_active():
             QMessageBox.information(
                 self.ui,
                 self.tr("Go to {untrusted}").format(untrusted=short_key(untrusted_device.pub_key_bech32)),
@@ -387,13 +356,12 @@ class BaseNostrSync(QObject):
                 ),
             )
 
-        self.signal_add_trusted_device.emit(trusted_device)
+        self.signal_add_trusted_device.emit(pub_key_bech32)
 
         self.nostr_protocol.publish_trust_me_back(
             author_public_key=self.group_chat.my_public_key(),
             recipient_public_key=device_public_key,
         )
-        return trusted_device
 
 
 class NostrSync(BaseNostrSync):
@@ -437,6 +405,7 @@ class NostrSync(BaseNostrSync):
 
 
 class NostrSyncWithSingleChats(BaseNostrSync):
+
     def __init__(
         self,
         network: bdk.Network,
@@ -480,26 +449,26 @@ class NostrSyncWithSingleChats(BaseNostrSync):
         self.signal_add_trusted_device.connect(self.add_chat_for_trusted_device)
         self.signal_remove_trusted_device.connect(self.remove_chat_for_trusted_device)
 
-    def add_chat_for_trusted_device(self, trusted_device: TrustedDevice):
+    def add_chat_for_trusted_device(self, pub_key_bech32: str):
         chat = Chat(
             network=self.network,
             group_chat=self.group_chat,
             signals_min=self.signals_min,
             use_compression=self.use_compression,
-            restrict_to_counterparties=[PublicKey.from_bech32(trusted_device.pub_key_bech32)],
+            restrict_to_counterparties=[PublicKey.parse(pub_key_bech32)],
             display_labels=[ChatLabel.SingleRecipient],
             send_label=ChatLabel.SingleRecipient,
         )
-        self.chats[trusted_device.pub_key_bech32] = chat
-        self.ui.tabs.addTab(chat.gui, short_key(trusted_device.pub_key_bech32))
+        self.chats[pub_key_bech32] = chat
+        self.ui.tabs.addTab(chat.gui, short_key(pub_key_bech32))
 
-    def remove_chat_for_trusted_device(self, trusted_device: TrustedDevice):
-        if trusted_device.pub_key_bech32 not in self.chats:
+    def remove_chat_for_trusted_device(self, pub_key_bech32: str):
+        if pub_key_bech32 not in self.chats:
             return
-        chat = self.chats[trusted_device.pub_key_bech32]
+        chat = self.chats[pub_key_bech32]
 
         index = self.ui.tabs.indexOf(chat.gui)
         if index >= 0:
             self.ui.tabs.removeTab(index)
 
-        del self.chats[trusted_device.pub_key_bech32]
+        del self.chats[pub_key_bech32]

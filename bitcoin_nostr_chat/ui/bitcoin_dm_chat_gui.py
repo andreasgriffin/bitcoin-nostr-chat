@@ -28,11 +28,13 @@
 
 
 import logging
+from collections import deque
 from datetime import datetime
 
 import bdkpython as bdk
+from PyQt6.QtGui import QColor
 
-from bitcoin_nostr_chat.nostr import BitcoinDM
+from bitcoin_nostr_chat.group_chat import BitcoinDM
 from bitcoin_nostr_chat.signals_min import SignalsMin
 from bitcoin_nostr_chat.ui.chat_gui import ChatGui, FileObject
 from bitcoin_nostr_chat.ui.util import short_key
@@ -41,15 +43,13 @@ from ..signals_min import SignalsMin
 
 logger = logging.getLogger(__name__)
 
-from collections import deque
-
 
 class BitcoinDmChatGui(ChatGui):
     def __init__(self, signals_min: SignalsMin):
         super().__init__(signals_min)
         self.dms: deque[BitcoinDM] = deque(maxlen=10000)
 
-    def add_dm(self, dm: BitcoinDM, is_me: bool):
+    def add_dm(self, dm: BitcoinDM, is_me: bool, color: QColor):
         if not dm.author:
             return
 
@@ -66,6 +66,7 @@ class BitcoinDmChatGui(ChatGui):
                 text=text,
                 file_object=file_object,
                 created_at=dm.created_at if dm.created_at else datetime.now(),
+                color=color,
             )
         else:
             self.add_other(
@@ -73,6 +74,7 @@ class BitcoinDmChatGui(ChatGui):
                 file_object=file_object,
                 other_name=short_key(dm.author.to_bech32()) if dm.author else "Unknown",
                 created_at=dm.created_at if dm.created_at else datetime.now(),
+                color=color,
             )
 
         self.dms.append(dm)
