@@ -28,41 +28,34 @@
 
 
 import logging
-
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QSplitter, QTextEdit, QVBoxLayout, QWidget
-
-from bitcoin_nostr_chat.ui.util import read_QIcon, short_key
-
-from ..html import html_f
-from ..nostr import RelayList
-from ..signals_min import SignalsMin
-
-logger = logging.getLogger(__name__)
-
-import uuid
-from typing import Callable, Generic, List, Optional, Type, TypeVar
+from typing import Callable, Optional
 
 from nostr_sdk import Keys
 from PyQt6 import QtCore, QtWidgets
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QFont, QResizeEvent
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QMenu,
     QMessageBox,
-    QPushButton,
-    QScrollArea,
+    QSplitter,
     QTabWidget,
     QTextEdit,
     QToolButton,
     QVBoxLayout,
     QWidget,
 )
+
+from bitcoin_nostr_chat.ui.device_manager import DeviceManager
+from bitcoin_nostr_chat.ui.util import chat_color, read_QIcon, short_key
+
+from ..group_chat import RelayList
+from ..html import html_f
+from ..signals_min import SignalsMin
+
+logger = logging.getLogger(__name__)
 
 
 class RelayDialog(QDialog):
@@ -104,232 +97,7 @@ class RelayDialog(QDialog):
         self.signal_set_relays.emit(RelayList.from_text(self.text_edit.toPlainText()))
 
 
-class InvisibleScrollArea(QScrollArea):
-    def __init__(self, parent=None):
-        super().__init__(parent=parent)
-
-        self.unique_id = uuid.uuid4()
-
-        self.setObjectName(f"{self.unique_id}")
-        self.setStyleSheet(f"#{self.unique_id}" + " { background: transparent; border: none; }")
-
-        self.content_widget = QWidget()
-        self.content_widget_layout = QVBoxLayout(self.content_widget)
-        self.content_widget.setObjectName(f"{self.unique_id}_content")
-        self.content_widget.setStyleSheet(
-            f"#{self.unique_id}_content" + " { background: transparent; border: none; }"
-        )
-
-        self.setWidget(self.content_widget)
-
-
-class CloseButton(QtWidgets.QPushButton):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setStyleSheet(
-            """
-            background-color: red;
-            """
-        )
-        self.setText("X")
-        self.setFixedSize(15, 15)  # adjust size as needed
-
-
-class BaseDevice(QWidget):
-    signal_close = QtCore.pyqtSignal(QWidget)
-
-    def __init__(self, pub_key_bech32: str):
-        super().__init__()
-        self.pub_key_bech32 = pub_key_bech32
-        self.close_button: Optional[QPushButton] = None
-
-        self._layout = QtWidgets.QVBoxLayout(self)
-        self._layout.setContentsMargins(0, 0, 0, 0)  # Left, Top, Right, Bottom margins
-
-    def resizeEvent(self, event: QResizeEvent | None) -> None:
-        if self.close_button:
-            self.close_button.move(self.width() - self.close_button.width(), 0)
-
-    def create_close_button(self):
-
-        self.close_button = CloseButton(self)
-        self.close_button.clicked.connect(lambda: self.signal_close.emit(self))
-
-
-class UnTrustedDevice(BaseDevice):
-    signal_trust_me = QtCore.pyqtSignal(str)
-
-    def __init__(self, pub_key_bech32: str, signals_min: SignalsMin):
-        super().__init__(pub_key_bech32)
-        self.signals_min = signals_min
-
-        self.button_add_trusted = QPushButton()
-        self.button_add_trusted.clicked.connect(lambda: self.signal_trust_me.emit(pub_key_bech32))
-        self._layout.addWidget(self.button_add_trusted)
-        self.setMinimumHeight(self.button_add_trusted.sizeHint().height())
-        self.timer = QTimer(self)
-        self.updateUi()
-
-        # signals
-        signals_min.language_switch.connect(self.updateUi)
-
-    def updateUi(self):
-        self.button_add_trusted.setText(self.tr("Trust {id}").format(id=short_key(self.pub_key_bech32)))
-
-    def trust_request_active(self) -> bool:
-        return self.timer.isActive()
-
-    def set_button_status_to_accept(self):
-        # Change the button's color to green and text to "Green"
-        self.button_add_trusted.setStyleSheet("background-color: green;")
-        self.button_add_trusted.setText(
-            self.tr("Accept trust request from {other}").format(other=short_key(self.pub_key_bech32))
-        )
-
-        self.timer.timeout.connect(self.reset_button)
-        seconds = 60
-        self.timer.start(seconds * 1000)  # convert to milliseconds
-
-    def reset_button(self):
-        # Reset the button's style to default and text to "Click me"
-        self.button_add_trusted.setStyleSheet("")
-        # Stop the timer to avoid it running indefinitely
-        self.timer.stop()
-
-
-class TrustedDevice(BaseDevice):
-    def __init__(
-        self,
-        pub_key_bech32: str,
-        signals_min: SignalsMin,
-    ):
-        super().__init__(pub_key_bech32)
-        self.signals_min = signals_min
-
-        self.groupbox = QGroupBox()
-        self.groupbox_layout = QVBoxLayout(self.groupbox)
-
-        self._layout.addWidget(self.groupbox)
-
-        self.groupbox.setLayout(QtWidgets.QVBoxLayout())
-        current_margins = self.groupbox_layout.contentsMargins()
-
-        self.groupbox_layout.setContentsMargins(
-            current_margins.left(),
-            int(current_margins.top() * 2),
-            current_margins.right(),
-            current_margins.bottom(),
-        )  # Left, Top, Right, Bottom margins
-
-        self.groupbox.setStyleSheet(
-            """
-            QGroupBox {
-                border: 1px solid rgba(128, 128, 128, 0.7); /* Border styling */
-            }
-
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px; /* Horizontal position of the title */
-                top: 3px; /* Move the title a few pixels down */
-                background-color: transparent; /* Make the title background transparent */
-            }            
-        """
-        )
-
-        # Create a QFont object with the desired properties
-        boldFont = QFont()
-        boldFont.setBold(True)
-
-        # Apply the QFont to the QGroupBox's title
-        self.groupbox.setFont(boldFont)
-
-        self.label = QLabel()
-        self.groupbox_layout.addWidget(self.label)
-        self.setMinimumHeight(self.groupbox.sizeHint().height())
-
-        self.create_close_button()
-
-        self.updateUi()
-        signals_min.language_switch.connect(self.updateUi)
-
-    def updateUi(self):
-        self.groupbox.setTitle(self.tr("Connected to {id}").format(id=short_key(self.pub_key_bech32)))
-        self.label = QLabel(
-            f""" <ul>
-                        <li>{self.tr('Syncing Address labels')}</li>
-                        <li>{self.tr('Can share Transactions')}</li>
-                    </ul>      
-                    """
-        )
-
-    @classmethod
-    def from_untrusted(cls, untrusted_device: UnTrustedDevice) -> "TrustedDevice":
-        return TrustedDevice(
-            untrusted_device.pub_key_bech32,
-            signals_min=untrusted_device.signals_min,
-        )
-
-
-T = TypeVar("T", bound=BaseDevice)
-
-
-class DeviceList(Generic[T], QtWidgets.QWidget):
-    signal_added_device = QtCore.pyqtSignal(TrustedDevice)
-
-    def __init__(
-        self,
-        device_class: Type[T],
-    ):
-        super().__init__()
-        self.device_class = device_class
-
-        self.main_layout = QtWidgets.QVBoxLayout(self)
-        self.main_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
-        self.main_layout.setContentsMargins(0, 0, 0, 0)
-
-        self.scrollarea = InvisibleScrollArea(parent=self)
-        self.scrollarea.setWidgetResizable(True)
-
-        self.scrollarea.content_widget_layout.setContentsMargins(0, 0, 0, 0)  # Set all margins to zero
-        self.scrollarea.content_widget_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
-
-        self.main_layout.addWidget(self.scrollarea)
-
-    def add_device(self, device: T) -> bool:
-        if self.device_already_present(device.pub_key_bech32):
-            return False
-        device.signal_close.connect(self.remove_device)
-
-        self.scrollarea.content_widget_layout.addWidget(device)
-        self.signal_added_device.emit(device)
-        return True
-
-    def remove_device(self, device: T):
-        device.setParent(None)
-        self.scrollarea.content_widget_layout.removeWidget(device)
-
-        device.close()
-        device.deleteLater()
-
-    def device_already_present(self, pub_key_bech32: str) -> bool:
-        for device in self.get_devices():
-            if device.pub_key_bech32 == pub_key_bech32:
-                return True
-        return False
-
-    def get_device(self, pub_key_bech32: str) -> Optional[T]:
-        for device in self.get_devices():
-            if device.pub_key_bech32 == pub_key_bech32:
-                return device
-        return None
-
-    def get_devices(self) -> List[T]:
-        return self.scrollarea.content_widget.findChildren(self.device_class)
-
-
 class UI(QtWidgets.QWidget):
-    signal_trust_device = QtCore.pyqtSignal(UnTrustedDevice)
-    signal_untrust_device = QtCore.pyqtSignal(TrustedDevice)
     signal_set_keys = QtCore.pyqtSignal()
     signal_reset_keys = QtCore.pyqtSignal()
     signal_set_relays = QtCore.pyqtSignal(RelayList)
@@ -381,19 +149,8 @@ class UI(QtWidgets.QWidget):
         toolbar_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         toolbar_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
-        self.group_trusted = QGroupBox()
-        self.group_trusted_layout = QVBoxLayout(self.group_trusted)
-        left_side_layout.addWidget(self.group_trusted)
-
-        self.trusted_devices = DeviceList(TrustedDevice)
-        self.group_trusted_layout.addWidget(self.trusted_devices)
-
-        self.group_untrusted = QGroupBox()
-        self.group_untrusted_layout = QVBoxLayout(self.group_untrusted)
-        left_side_layout.addWidget(self.group_untrusted)
-
-        self.untrusted_devices = DeviceList(UnTrustedDevice)
-        self.group_untrusted_layout.addWidget(self.untrusted_devices)
+        self.device_manager = DeviceManager()
+        left_side_layout.addWidget(self.device_manager)
 
         self.updateUi()
 
@@ -425,8 +182,7 @@ class UI(QtWidgets.QWidget):
             self.action_reset_identity.setText(self.tr("Reset sync key"))
         if self.action_set_relays:
             self.action_set_relays.setText(self.tr("Set custom Relay list"))
-        self.group_trusted.setTitle(self.tr("Trusted"))
-        self.group_untrusted.setTitle(self.tr("UnTrusted"))
+        self.device_manager.updateUi()
         if not self.my_keys:
             self.title_label.setText("")
         else:
@@ -434,65 +190,15 @@ class UI(QtWidgets.QWidget):
                 html_f(
                     self.tr("My Device: {id}").format(id=short_key(self.my_keys.public_key().to_bech32())),
                     bf=True,
+                    color=chat_color(
+                        self.my_keys.public_key().to_bech32(),
+                    ).name(),
                 )
             )
 
     def set_my_keys(self, my_keys: Keys):
         self.my_keys = my_keys
         self.updateUi()
-
-    def add_trusted_device(self, device: TrustedDevice):
-        if self.trusted_devices.device_already_present(device.pub_key_bech32):
-            return
-
-        self.trusted_devices.add_device(device)
-        device.signal_close.connect(lambda s: self.signal_untrust_device.emit(device))
-
-    def add_untrusted_device(self, untrusted_device: UnTrustedDevice) -> bool:
-        if self.untrusted_devices.device_already_present(untrusted_device.pub_key_bech32):
-            return False
-        if self.trusted_devices.device_already_present(untrusted_device.pub_key_bech32):
-            # no need to add an untrusted device if i am trusting it already
-            return False
-
-        success = self.untrusted_devices.add_device(untrusted_device)
-        if not success:
-            return success
-
-        def add_to_trusted(pub_key_bech32: str):
-            assert pub_key_bech32 == untrusted_device.pub_key_bech32
-            self.signal_trust_device.emit(untrusted_device)
-            # self.trust_device(untrusted_device)
-
-        untrusted_device.signal_trust_me.connect(add_to_trusted)
-        return True
-
-    def trust_device(
-        self,
-        untrusted_device: UnTrustedDevice,
-    ) -> TrustedDevice:
-        self.untrusted_devices.remove_device(untrusted_device)
-
-        device = self.trusted_devices.get_device(untrusted_device.pub_key_bech32)
-        if device:
-            return device
-
-        trusted_device = TrustedDevice.from_untrusted(untrusted_device)
-        self.add_trusted_device(trusted_device)
-        return trusted_device
-
-    def untrust_device(self, trusted_device: TrustedDevice) -> UnTrustedDevice:
-        self.trusted_devices.remove_device(trusted_device)
-
-        device = self.untrusted_devices.get_device(trusted_device.pub_key_bech32)
-        if device:
-            return device
-
-        untrusted_device = UnTrustedDevice(
-            pub_key_bech32=trusted_device.pub_key_bech32, signals_min=self.signals_min
-        )
-        self.add_untrusted_device(untrusted_device)
-        return untrusted_device
 
     def closeEvent(self, event):
         self.signal_close_event.emit()

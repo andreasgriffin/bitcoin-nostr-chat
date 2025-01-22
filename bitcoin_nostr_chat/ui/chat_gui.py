@@ -28,16 +28,8 @@
 
 
 import logging
-from datetime import datetime
-
-from bitcoin_nostr_chat.dialogs import file_to_str
-from bitcoin_nostr_chat.signals_min import SignalsMin
-from bitcoin_nostr_chat.ui.util import read_QIcon
-
-from ..signals_min import SignalsMin
-
-logger = logging.getLogger(__name__)
 import os
+from datetime import datetime
 
 from bitcoin_qr_tools.data import Data
 from PyQt6.QtCore import QModelIndex, QSize, Qt, pyqtSignal
@@ -63,6 +55,14 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from bitcoin_nostr_chat.dialogs import file_to_str
+from bitcoin_nostr_chat.signals_min import SignalsMin
+from bitcoin_nostr_chat.ui.util import read_QIcon
+
+from ..signals_min import SignalsMin
+
+logger = logging.getLogger(__name__)
 
 
 class MultiLineListView(QWidget):
@@ -191,7 +191,7 @@ class ChatGui(QWidget):
         super().__init__()
         self._layout = QVBoxLayout(self)
         self.chat_list_display = ChatListWidget()
-        self._layout.setContentsMargins(0, 0, 0, 0)  # Left, Top, Right, Bottom margins
+        # self._layout.setContentsMargins(0, 0, 0, 0)  # Left, Top, Right, Bottom margins
         self._layout.addWidget(self.chat_list_display)
 
         self.textInput = QLineEdit()
@@ -271,59 +271,65 @@ class ChatGui(QWidget):
         self.textInput.clear()
         # self.add_own(text)
 
-    def _add_message(self, text: str, alignment: Qt.AlignmentFlag, color: str, created_at: datetime):
+    def _add_message(self, text: str, alignment: Qt.AlignmentFlag, color: QColor, created_at: datetime):
         item = self.chat_list_display.addItem(text, created_at=created_at)
         item.setTextAlignment(alignment)
-        item.setForeground(QBrush(QColor(color)))
+        item.setForeground(QBrush(color))
 
     def _add_file(
         self,
         text: str,
         file_object: FileObject,
         alignment: Qt.AlignmentFlag,
-        color: str,
+        color: QColor,
         created_at: datetime,
     ):
         item = self.chat_list_display.add_file(file_object, created_at=created_at)
         item.setTextAlignment(alignment)
-        item.setForeground(QBrush(QColor(color)))
+        item.setForeground(QBrush(color))
         item.setText(text)
 
-    def add_own(self, created_at: datetime, text: str = "", file_object: FileObject | None = None):
+    def add_own(
+        self, created_at: datetime, color: QColor, text: str = "", file_object: FileObject | None = None
+    ):
         if file_object:
             self._add_file(
-                self.tr("Me: {text}").format(text=text),
-                file_object,
-                Qt.AlignmentFlag.AlignRight,
-                "green",
+                text=self.tr("Me: {text}").format(text=text),
+                file_object=file_object,
+                alignment=Qt.AlignmentFlag.AlignRight,
+                color=color,
                 created_at=created_at,
             )
         else:
             self._add_message(
-                self.tr("Me: {text}").format(text=text),
-                Qt.AlignmentFlag.AlignRight,
-                "green",
+                text=self.tr("Me: {text}").format(text=text),
+                alignment=Qt.AlignmentFlag.AlignRight,
+                color=color,
                 created_at=created_at,
             )
 
     def add_other(
         self,
         created_at: datetime,
+        color: QColor,
         text: str = "",
         file_object: FileObject | None = None,
         other_name: str = "Other",
     ):
         if file_object:
             self._add_file(
-                f"{other_name}: {text}",
-                file_object,
-                Qt.AlignmentFlag.AlignLeft,
-                "blue",
+                text=f"{other_name}: {text}",
+                file_object=file_object,
+                alignment=Qt.AlignmentFlag.AlignLeft,
+                color=color,
                 created_at=created_at,
             )
         else:
             self._add_message(
-                f"{other_name}: {text}", Qt.AlignmentFlag.AlignLeft, "blue", created_at=created_at
+                text=f"{other_name}: {text}",
+                alignment=Qt.AlignmentFlag.AlignLeft,
+                color=color,
+                created_at=created_at,
             )
 
 
