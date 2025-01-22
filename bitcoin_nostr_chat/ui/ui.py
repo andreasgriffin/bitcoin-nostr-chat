@@ -117,12 +117,15 @@ class UI(QtWidgets.QWidget):
         self.get_relay_list = get_relay_list
 
         self._layout = QHBoxLayout(self)
+        # self._layout.setContentsMargins(0, 0, 0, 0)  # Left, Top, Right, Bottom margins
 
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
         self._layout.addWidget(self.splitter)
 
         left_side = QWidget()
         left_side_layout = QVBoxLayout(left_side)
+        left_side_layout.setContentsMargins(0, 0, 0, 0)  # Left, Top, Right, Bottom margins
+
         self.splitter.addWidget(left_side)
 
         self.tabs = QTabWidget()
