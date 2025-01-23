@@ -52,7 +52,7 @@ class TrustedDeviceItem(BaseDeviceItem):
         # Close button (top-right)
         self.close_button = QPushButton()
         self.close_button.setIcon(
-            (self.style() or QStyle()).standardIcon(QStyle.StandardPixmap.SP_DialogCloseButton)
+            (self.style() or QStyle()).standardIcon(QStyle.StandardPixmap.SP_TabCloseButton)
         )
         self.close_button.setFixedSize(24, 24)  # Set button size
         self.close_button.setFlat(True)  # Optional: make the button flat
