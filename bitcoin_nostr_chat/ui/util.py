@@ -1,5 +1,6 @@
 import hashlib
 import os
+from pathlib import Path
 
 from PyQt6.QtGui import QColor, QIcon, QPalette
 from PyQt6.QtWidgets import QApplication
@@ -10,8 +11,20 @@ def resource_path(*parts):
     return os.path.join(pkg_dir, *parts)
 
 
+def resource_path_auto_darkmode(*parts: str):
+    if is_dark_mode():
+        filename = parts[-1]
+        name, extension = os.path.splitext(filename)
+        modified_parts = list(parts)[:-1] + [f"{name}_darkmode{extension}"]
+        combined_path = resource_path(*modified_parts)
+        if Path(combined_path).exists():
+            return combined_path
+
+    return resource_path(*parts)
+
+
 def icon_path(icon_basename: str):
-    return resource_path("icons", icon_basename)
+    return resource_path_auto_darkmode("icons", icon_basename)
 
 
 def read_QIcon(icon_basename: str) -> QIcon:
