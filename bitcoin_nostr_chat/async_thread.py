@@ -117,7 +117,10 @@ class AsyncThread(QThread):
             self.task_queue.put_nowait((coro_func, on_done))
 
         # Schedule the queue put in a thread-safe manner.
-        self.loop.call_soon_threadsafe(put_item)
+        if not self.loop.is_closed():
+            self.loop.call_soon_threadsafe(put_item)
+        else:
+            logger.warning("Event loop is closed; cannot schedule tasks anymore.")
 
     def run_coroutine_parallel(self, coro_func: Awaitable, callback=None):
         """
