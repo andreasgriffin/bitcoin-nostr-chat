@@ -188,10 +188,20 @@ class UI(QtWidgets.QWidget):
         self.device_manager.updateUi()
         if not self.my_keys:
             self.title_label.setText("")
+            self.title_label.setToolTip("")
         else:
             self.title_label.setText(
                 html_f(
                     self.tr("My Device: {id}").format(id=short_key(self.my_keys.public_key().to_bech32())),
+                    bf=True,
+                    color=chat_color(
+                        self.my_keys.public_key().to_bech32(),
+                    ).name(),
+                )
+            )
+            self.title_label.setToolTip(
+                html_f(
+                    self.tr("My Device: {id}").format(id=self.my_keys.public_key().to_bech32()),
                     bf=True,
                     color=chat_color(
                         self.my_keys.public_key().to_bech32(),

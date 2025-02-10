@@ -97,9 +97,13 @@ class AsyncThread(QThread):
         self.loop.close()
 
     def stop(self):
-        """Stop the event loop (if needed)."""
+        """Stop the event loop (if needed) and wait for the thread to finish."""
         if self.loop.is_running():
+            # Schedule loop.stop() to run from within the event loop
             self.loop.call_soon_threadsafe(self.loop.stop)
+
+            # Wait for run() to return and the thread to exit
+            self.wait()
 
     def queue_coroutine(self, coro_func: Awaitable, on_done=None):
         """
