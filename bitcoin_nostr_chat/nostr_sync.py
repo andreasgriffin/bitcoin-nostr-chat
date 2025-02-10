@@ -28,7 +28,7 @@
 
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
 import bdkpython as bdk
@@ -319,7 +319,7 @@ class BaseNostrSync(QObject):
             )
         )
 
-        if dm.please_trust_public_key_bech32:
+        if dm.please_trust_public_key_bech32 and datetime.now() - dm.created_at < timedelta(hours=2):
             # the message is a request to trust the author
             untrusted_device = self.ui.device_manager.untrusted.get_device(dm.public_key_bech32)
             if not untrusted_device:
