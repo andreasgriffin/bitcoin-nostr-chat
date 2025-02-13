@@ -87,6 +87,7 @@ class BaseNostrSync(QObject):
 
     signal_remove_trusted_device = pyqtSignal(str)
     signal_add_trusted_device = pyqtSignal(str)
+    signal_trusted_device_published_trust_me_back = pyqtSignal(str)
 
     def __init__(
         self,
@@ -311,6 +312,7 @@ class BaseNostrSync(QObject):
             # if I'm the autor do noting
             return
         if self.ui.device_manager.trusted.get_device(dm.public_key_bech32):
+            self.signal_trusted_device_published_trust_me_back.emit(dm.public_key_bech32)
             return
 
         self.ui.device_manager.untrusted.add_list_item(
