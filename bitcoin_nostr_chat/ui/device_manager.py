@@ -68,6 +68,7 @@ class TrustedDeviceItem(BaseDeviceItem):
 
     def updateUi(self):
         self.label.setText(short_key(self.pub_key_bech32))
+        self.label.setToolTip(self.pub_key_bech32)
         palette = self.label.palette()
         palette.setColor(self.label.foregroundRole(), chat_color(self.pub_key_bech32))
         self.label.setPalette(palette)
@@ -104,6 +105,7 @@ class UntrustedDeviceItem(BaseDeviceItem):
 
     def updateUi(self):
         self.label.setText(short_key(self.pub_key_bech32))
+        self.label.setToolTip(self.pub_key_bech32)
         palette = self.label.palette()
         palette.setColor(self.label.foregroundRole(), chat_color(self.pub_key_bech32))
         self.label.setPalette(palette)
