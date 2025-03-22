@@ -2,7 +2,7 @@ import logging
 import sys
 from typing import Generic, TypeVar
 
-from PyQt6.QtCore import QTimer, pyqtSignal
+from PyQt6.QtCore import QPoint, Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -11,32 +11,69 @@ from PyQt6.QtWidgets import (
     QLabel,
     QListWidget,
     QListWidgetItem,
+    QMenu,
     QPushButton,
     QStyle,
     QVBoxLayout,
     QWidget,
 )
 
-from bitcoin_nostr_chat.ui.util import chat_color, short_key
+from bitcoin_nostr_chat.ui.util import chat_color, get_input_text, short_key
 
 logger = logging.getLogger(__name__)
 
 
 class BaseDeviceItem(QWidget):
+    signal_set_alias = pyqtSignal(str, str)
     signal_untrust_device = pyqtSignal(str)
     signal_trust_device = pyqtSignal(str)
 
-    def __init__(self, pub_key_bech32: str, parent: QWidget | None = None) -> None:
+    def __init__(self, pub_key_bech32: str, alias: str | None = None, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.pub_key_bech32 = pub_key_bech32
+        self.alias = alias
+        self.label = QLabel()
+
+        # Enable the custom context menu on the label
+        self.label.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        # Connect the customContextMenuRequested signal to the function
+        self.label.customContextMenuRequested.connect(self.show_label_context_menu)
 
     def updateUi(self):
         pass
 
+    def get_label_text(self) -> str:
+        return self.alias if self.alias else short_key(self.pub_key_bech32)
+
+    def set_alias_text(self, alias: str):
+        self.alias = alias
+        self.updateUi()
+
+    # Define a function to display the context menu
+    def show_label_context_menu(self, point: QPoint):
+        # Create a QMenu with the label as its parent
+        menu = QMenu(self.label)
+        action_rename = menu.addAction(self.tr("Rename"))
+
+        # Map the local point to a global position and display the menu
+        selected_action = menu.exec(self.label.mapToGlobal(point))
+
+        # Handle the selected action
+        if selected_action == action_rename:
+            alias = get_input_text(
+                placeholder_text=self.tr("Enter a name of device with {npub}").format(
+                    npub=self.pub_key_bech32
+                ),
+                title=self.tr("Device name"),
+                textcolor=chat_color(self.pub_key_bech32),
+            )
+            if alias:
+                self.signal_set_alias.emit(self.pub_key_bech32, alias)
+
 
 class TrustedDeviceItem(BaseDeviceItem):
-    def __init__(self, pub_key_bech32: str, parent: QWidget | None = None) -> None:
-        super().__init__(pub_key_bech32=pub_key_bech32, parent=parent)
+    def __init__(self, pub_key_bech32: str, alias: str | None = None, parent: QWidget | None = None) -> None:
+        super().__init__(pub_key_bech32=pub_key_bech32, alias=alias, parent=parent)
 
         main_layout = QVBoxLayout(self)
         # main_layout.setContentsMargins(5, 5, 5, 5)  # Add some padding
@@ -46,7 +83,6 @@ class TrustedDeviceItem(BaseDeviceItem):
         # top_layout.setContentsMargins(0, 0, 0, 0)  # Tighten spacing
 
         # Label (top-left)
-        self.label = QLabel()
         top_layout.addWidget(self.label)
 
         # Close button (top-right)
@@ -67,7 +103,7 @@ class TrustedDeviceItem(BaseDeviceItem):
         self.close_button.clicked.connect(lambda: self.signal_untrust_device.emit(self.pub_key_bech32))
 
     def updateUi(self):
-        self.label.setText(short_key(self.pub_key_bech32))
+        self.label.setText(self.get_label_text())
         self.label.setToolTip(self.pub_key_bech32)
         palette = self.label.palette()
         palette.setColor(self.label.foregroundRole(), chat_color(self.pub_key_bech32))
@@ -77,8 +113,8 @@ class TrustedDeviceItem(BaseDeviceItem):
 
 
 class UntrustedDeviceItem(BaseDeviceItem):
-    def __init__(self, pub_key_bech32: str, parent: QWidget | None = None) -> None:
-        super().__init__(pub_key_bech32=pub_key_bech32, parent=parent)
+    def __init__(self, pub_key_bech32: str, alias: str | None = None, parent: QWidget | None = None) -> None:
+        super().__init__(pub_key_bech32=pub_key_bech32, alias=alias, parent=parent)
         self.timer = QTimer(self)
 
         main_layout = QVBoxLayout(self)
@@ -89,7 +125,6 @@ class UntrustedDeviceItem(BaseDeviceItem):
         # top_layout.setContentsMargins(0, 0, 0, 0)  # Tighten spacing
 
         # Label (top-left)
-        self.label = QLabel(pub_key_bech32)
         top_layout.addWidget(self.label)
 
         # Close button (top-right)
@@ -104,7 +139,7 @@ class UntrustedDeviceItem(BaseDeviceItem):
         self.button_trust.clicked.connect(lambda: self.signal_trust_device.emit(self.pub_key_bech32))
 
     def updateUi(self):
-        self.label.setText(short_key(self.pub_key_bech32))
+        self.label.setText(self.get_label_text())
         self.label.setToolTip(self.pub_key_bech32)
         palette = self.label.palette()
         palette.setColor(self.label.foregroundRole(), chat_color(self.pub_key_bech32))
@@ -196,6 +231,8 @@ class DeviceList(QListWidget, Generic[T]):
 
 
 class DeviceManager(QWidget):
+    signal_set_alias = pyqtSignal(str, str)
+
     def __init__(self):
         super().__init__()
         self._layout = QVBoxLayout(self)
@@ -220,11 +257,23 @@ class DeviceManager(QWidget):
 
         self.updateUi()
 
-    def create_untrusted_device(self, pub_key_bech32: str):
-        self.untrusted.add_list_item(UntrustedDeviceItem(pub_key_bech32=pub_key_bech32))
+    def create_untrusted_device(
+        self,
+        pub_key_bech32: str,
+        alias: str | None = None,
+    ):
+        device = UntrustedDeviceItem(pub_key_bech32=pub_key_bech32, alias=alias)
+        device.signal_set_alias.connect(self.signal_set_alias)
+        self.untrusted.add_list_item(device)
 
-    def create_trusted_device(self, pub_key_bech32: str):
-        self.trusted.add_list_item(TrustedDeviceItem(pub_key_bech32=pub_key_bech32))
+    def create_trusted_device(
+        self,
+        pub_key_bech32: str,
+        alias: str | None = None,
+    ):
+        device = TrustedDeviceItem(pub_key_bech32=pub_key_bech32, alias=alias)
+        device.signal_set_alias.connect(self.signal_set_alias)
+        self.trusted.add_list_item(device)
 
     def updateUi(self):
         self.group_trusted.setTitle(self.tr("Trusted"))
@@ -235,11 +284,20 @@ class DeviceManager(QWidget):
 
     def untrust(self, pub_key_bech32: str):
         self.trusted.remove(pub_key_bech32=pub_key_bech32)
-        self.untrusted.add_list_item(UntrustedDeviceItem(pub_key_bech32=pub_key_bech32))
+        self.create_untrusted_device(pub_key_bech32=pub_key_bech32)
 
     def remove_from_all(self, pub_key_bech32: str):
         self.trusted.remove(pub_key_bech32=pub_key_bech32)
         self.untrusted.remove(pub_key_bech32=pub_key_bech32)
+
+    def on_set_alias(self, npub: str, alias: str):
+        trusted = self.trusted.get_device(npub)
+        if trusted:
+            trusted.set_alias_text(alias)
+
+        untrusted = self.untrusted.get_device(npub)
+        if untrusted:
+            untrusted.set_alias_text(alias)
 
 
 if __name__ == "__main__":

@@ -2,8 +2,14 @@ import hashlib
 import os
 from pathlib import Path
 
-from PyQt6.QtGui import QColor, QIcon, QPalette
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtGui import QColor, QIcon, QKeySequence, QPalette, QShortcut
+from PyQt6.QtWidgets import (
+    QApplication,
+    QDialog,
+    QDialogButtonBox,
+    QLineEdit,
+    QVBoxLayout,
+)
 
 
 def resource_path(*parts):
@@ -66,3 +72,36 @@ def chat_color(pubkey: str) -> QColor:
     # Convert HSL to QColor
     color = QColor.fromHsl(hue, saturation, lightness)
     return color
+
+
+def get_input_text(placeholder_text: str, title: str, textcolor: QColor) -> str:
+    # Create a modal dialog
+    dialog = QDialog()
+    dialog.setWindowTitle(title)
+
+    # Set up the layout
+    layout = QVBoxLayout(dialog)
+
+    # Add a line edit where the user can input text and set its text color
+    line_edit = QLineEdit()
+    line_edit.setPlaceholderText(placeholder_text)
+    line_edit.setStyleSheet(f"color: {textcolor.name()};")
+    layout.addWidget(line_edit)
+
+    # Create a button bar with an OK button
+    button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
+    ok_button = button_box.button(QDialogButtonBox.StandardButton.Ok)
+    if ok_button:
+        ok_button.setDefault(True)
+    button_box.accepted.connect(dialog.accept)
+    layout.addWidget(button_box)
+
+    # Add a shortcut for the ESC key to close the dialog
+    shortcut_close = QShortcut(QKeySequence("ESC"), dialog)
+    shortcut_close.activated.connect(dialog.close)
+
+    # Execute the dialog modally
+    dialog.exec()
+
+    # Return the text that the user entered
+    return line_edit.text()

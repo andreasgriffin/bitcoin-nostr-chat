@@ -37,7 +37,6 @@ from PyQt6.QtGui import QColor
 from bitcoin_nostr_chat.group_chat import BitcoinDM
 from bitcoin_nostr_chat.signals_min import SignalsMin
 from bitcoin_nostr_chat.ui.chat_gui import ChatGui, FileObject
-from bitcoin_nostr_chat.ui.util import short_key
 
 from ..signals_min import SignalsMin
 
@@ -49,7 +48,7 @@ class BitcoinDmChatGui(ChatGui):
         super().__init__(signals_min)
         self.dms: deque[BitcoinDM] = deque(maxlen=10000)
 
-    def add_dm(self, dm: BitcoinDM, is_me: bool, color: QColor):
+    def add_dm(self, dm: BitcoinDM, is_me: bool, color: QColor, alias: str | None):
         if not dm.author:
             return
 
@@ -72,7 +71,7 @@ class BitcoinDmChatGui(ChatGui):
             self.add_other(
                 text=text,
                 file_object=file_object,
-                other_name=short_key(dm.author.to_bech32()) if dm.author else "Unknown",
+                other_name=alias if alias else "Unknown",
                 created_at=dm.created_at if dm.created_at else datetime.now(),
                 color=color,
             )

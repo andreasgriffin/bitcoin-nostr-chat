@@ -215,10 +215,12 @@ class GroupChat(BaseProtocol):
         dm_connection_dump: dict | None = None,
         members: List[PublicKey] | None = None,
         use_compression=DEFAULT_USE_COMPRESSION,
+        aliases: Dict[str, str] | None = None,
         parent: QObject | None = None,
     ) -> None:
         "Either keys or dm_connection_dump must be given"
         self.members: List[PublicKey] = members if members else []
+        self.aliases = aliases if aliases else {}
         self.use_compression = use_compression
         self.nip17_time_uncertainty = timedelta(
             days=2
@@ -296,6 +298,7 @@ class GroupChat(BaseProtocol):
             "members": [member.to_bech32() for member in self.members],
             "use_compression": self.use_compression,
             "network": self.network.name,
+            "aliases": self.aliases,
         }
 
     @classmethod
