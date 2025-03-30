@@ -45,8 +45,7 @@ from bitcoin_nostr_chat.label_connector import LabelConnector
 from bitcoin_nostr_chat.protocol_dm import ProtocolDM
 from bitcoin_nostr_chat.relay_list import RelayList
 from bitcoin_nostr_chat.signals_min import SignalsMin
-from bitcoin_nostr_chat.ui.device_manager import TrustedDeviceItem, UntrustedDeviceItem
-from bitcoin_nostr_chat.ui.util import short_key
+from bitcoin_nostr_chat.ui.util import chat_color, get_input_text, short_key
 from bitcoin_nostr_chat.utils import filtered_for_init
 
 from .chat import Chat
@@ -85,6 +84,7 @@ def file_to_str(file_path: str):
 
 class BaseNostrSync(QObject):
 
+    signal_set_alias = pyqtSignal(str, str)
     signal_remove_trusted_device = pyqtSignal(str)
     signal_add_trusted_device = pyqtSignal(str)
     signal_trusted_device_published_trust_me_back = pyqtSignal(str)
@@ -116,6 +116,7 @@ class BaseNostrSync(QObject):
             signals_min=signals_min,
             get_relay_list=self.group_chat.dm_connection.get_connected_relays,
         )
+        self.signal_set_alias.connect(self.ui.device_manager.on_set_alias)
 
         self.nostr_protocol.signal_dm.connect(self.on_signal_protocol_dm)
         self.group_chat.signal_dm.connect(self.on_dm)
@@ -126,6 +127,7 @@ class BaseNostrSync(QObject):
         self.ui.signal_reset_keys.connect(self.reset_own_key)
         self.ui.signal_set_keys.connect(self.set_own_key)
         self.ui.signal_close_event.connect(self.stop)
+        self.ui.device_manager.signal_set_alias.connect(self.signal_set_alias)
 
     def on_gui_signal_trust_device(self, pub_key_bech32: str):
         self.trust_device(pub_key_bech32=pub_key_bech32)
@@ -240,7 +242,10 @@ class BaseNostrSync(QObject):
             if sync.is_me(member):
                 # do not add myself as a device
                 continue
-            sync.ui.device_manager.trusted.add_list_item(TrustedDeviceItem(pub_key_bech32=member.to_bech32()))
+            pub_key_bech32 = member.to_bech32()
+            sync.ui.device_manager.create_trusted_device(
+                pub_key_bech32=pub_key_bech32, alias=sync.group_chat.aliases.get(pub_key_bech32)
+            )
 
         # restore/replay chat texts
         sync.nostr_protocol.dm_connection.replay_events_from_dump()
@@ -315,10 +320,8 @@ class BaseNostrSync(QObject):
             self.signal_trusted_device_published_trust_me_back.emit(dm.public_key_bech32)
             return
 
-        self.ui.device_manager.untrusted.add_list_item(
-            UntrustedDeviceItem(
-                pub_key_bech32=dm.public_key_bech32,
-            )
+        self.ui.device_manager.create_untrusted_device(
+            pub_key_bech32=dm.public_key_bech32,
         )
 
         if dm.please_trust_public_key_bech32 and datetime.now() - dm.created_at < timedelta(hours=2):
@@ -335,13 +338,16 @@ class BaseNostrSync(QObject):
 
         self.signal_remove_trusted_device.emit(pub_key_bech32)
 
+        if pub_key_bech32 in self.group_chat.aliases:
+            del self.group_chat.aliases[pub_key_bech32]
+
     def trust_device(self, pub_key_bech32: str, show_message=True):
         device_public_key = PublicKey.parse(pub_key_bech32)
         self.group_chat.add_member(device_public_key)
 
         untrusted_device = self.ui.device_manager.untrusted.get_device(pub_key_bech32)
         self.ui.device_manager.untrusted.remove(pub_key_bech32=pub_key_bech32)
-        self.ui.device_manager.trusted.add_list_item(TrustedDeviceItem(pub_key_bech32=pub_key_bech32))
+        self.ui.device_manager.create_trusted_device(pub_key_bech32=pub_key_bech32)
 
         if show_message and untrusted_device and not untrusted_device.trust_request_active():
             QMessageBox.information(
@@ -364,6 +370,14 @@ class BaseNostrSync(QObject):
             author_public_key=self.group_chat.my_public_key(),
             recipient_public_key=device_public_key,
         )
+
+        alias = get_input_text(
+            placeholder_text=self.tr("Enter a name of device with {npub}").format(npub=pub_key_bech32),
+            title="Device name",
+            textcolor=chat_color(pub_key_bech32),
+        )
+        if alias:
+            self.signal_set_alias.emit(pub_key_bech32, alias)
 
 
 class NostrSync(BaseNostrSync):
@@ -404,6 +418,7 @@ class NostrSync(BaseNostrSync):
             send_label=ChatLabel.GroupChat,
         )
         self.ui.tabs.addTab(self.chat.gui, self.tr("Group Chat"))
+        self.signal_set_alias.connect(self.chat.on_set_alias)
 
 
 class NostrSyncWithSingleChats(BaseNostrSync):
@@ -450,6 +465,7 @@ class NostrSyncWithSingleChats(BaseNostrSync):
 
         self.signal_add_trusted_device.connect(self.add_chat_for_trusted_device)
         self.signal_remove_trusted_device.connect(self.remove_chat_for_trusted_device)
+        self.signal_set_alias.connect(self.chat.on_set_alias)
 
     def add_chat_for_trusted_device(self, pub_key_bech32: str):
         chat = Chat(

@@ -44,7 +44,7 @@ from bitcoin_nostr_chat.group_chat import GroupChat
 from bitcoin_nostr_chat.signals_min import SignalsMin
 from bitcoin_nostr_chat.ui.bitcoin_dm_chat_gui import BitcoinDmChatGui
 from bitcoin_nostr_chat.ui.chat_gui import FileObject
-from bitcoin_nostr_chat.ui.util import chat_color
+from bitcoin_nostr_chat.ui.util import chat_color, short_key
 
 from .group_chat import BitcoinDM, GroupChat
 from .signals_min import SignalsMin
@@ -146,8 +146,16 @@ class Chat(BaseChat):
             dm,
             is_me=self.is_me(dm.author),
             color=chat_color(dm.author.to_bech32()),
+            alias=self.get_alias(dm.author),
         )
         self.signal_add_dm_to_chat.emit(dm)
+
+    def get_alias(self, npub: PublicKey) -> str | None:
+        if self.is_me(npub):
+            return None
+        if alias := self.group_chat.aliases.get(npub.to_bech32()):
+            return alias
+        return short_key(npub.to_bech32())
 
     def _send(self, dm: BitcoinDM):
         if self.restrict_to_counterparties:
@@ -176,3 +184,6 @@ class Chat(BaseChat):
             return
         self._send(dm)
         self.signal_send_dm.emit(dm)
+
+    def on_set_alias(self, npub: str, alias: str):
+        self.group_chat.aliases[npub] = alias
