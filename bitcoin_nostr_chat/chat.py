@@ -151,8 +151,6 @@ class Chat(BaseChat):
         self.signal_add_dm_to_chat.emit(dm)
 
     def get_alias(self, npub: PublicKey) -> str | None:
-        if self.is_me(npub):
-            return None
         if alias := self.group_chat.aliases.get(npub.to_bech32()):
             return alias
         return short_key(npub.to_bech32())
