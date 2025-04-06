@@ -29,6 +29,7 @@
 
 import logging
 import os
+import sys
 from datetime import datetime
 
 from bitcoin_qr_tools.data import Data
@@ -39,7 +40,10 @@ from PyQt6.QtGui import (
     QColor,
     QContextMenuEvent,
     QIcon,
+    QKeySequence,
+    QMouseEvent,
     QResizeEvent,
+    QShortcut,
     QStandardItem,
     QStandardItemModel,
 )
@@ -65,6 +69,34 @@ from ..signals_min import SignalsMin
 logger = logging.getLogger(__name__)
 
 
+class ChatListView(QListView):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setSelectionMode(QListView.SelectionMode.ExtendedSelection)
+        # Set up the shortcut for copying (Ctrl+C) within the list view
+        self.copyShortcut = QShortcut(QKeySequence("Ctrl+C"), self)
+        self.copyShortcut.activated.connect(self.copySelectedItemToClipboard)
+
+    def mousePressEvent(self, event: QMouseEvent | None):
+        if event:
+            # Check if the click is on an item by using indexAt()
+            index = self.indexAt(event.position().toPoint())
+            if not index.isValid():
+                self.clearSelection()  # Clear selection if empty space is clicked
+        super().mousePressEvent(event)
+
+    def copySelectedItemToClipboard(self):
+        # Sort the selected indexes by their row (visual order)
+        indexes = sorted(self.selectedIndexes(), key=lambda index: index.row())
+        if indexes:
+            texts = [index.data() for index in indexes]
+            combined_text = "\n".join(texts)
+            clipboard = QApplication.clipboard()
+            if clipboard:
+                clipboard.setText(combined_text)
+                logger.info(f"Copied to clipboard: {combined_text}")
+
+
 class MultiLineListView(QWidget):
     signal_clear = pyqtSignal()
 
@@ -73,7 +105,7 @@ class MultiLineListView(QWidget):
 
     def __init__(self):
         super().__init__()
-        self.listView = QListView(self)
+        self.listView = ChatListView(self)
         self.listView.setWordWrap(True)
         self.listView.clicked.connect(lambda qmodel_index: self.onItemClicked(qmodel_index))
 
@@ -90,12 +122,19 @@ class MultiLineListView(QWidget):
     def contextMenuEvent(self, event: QContextMenuEvent | None) -> None:
         menu = QMenu(self)
 
-        # Add actions to the menu
-        action1 = QAction(self.tr("Delete all messages"), self)
-        menu.addAction(action1)
-
+        # copy
+        action_copy = QAction(self.tr("Copy"), self)
+        menu.addAction(action_copy)
         # Connect actions to slots (functions)
-        action1.triggered.connect(self.on_delete_all_messages)
+        action_copy.triggered.connect(self.listView.copySelectedItemToClipboard)
+
+        menu.addSeparator()
+
+        # Add actions to the menu
+        action_delete = QAction(self.tr("Clear history"), self)
+        menu.addAction(action_delete)
+        # Connect actions to slots (functions)
+        action_delete.triggered.connect(self.on_delete_all_messages)
 
         # Pop up the menu at the current mouse position.
         if event:
