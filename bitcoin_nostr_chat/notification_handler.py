@@ -197,12 +197,22 @@ class NotificationHandler(HandleNotification):
             logger.debug(f"This nostr dm is already in the processed_dms")
             return
 
-        self.signal_dm.emit(nostr_dm)
+        self.emit_signal_dm(nostr_dm)
 
         logger.debug(f"Processed dm: {nostr_dm}")
 
-    def on_signal_dm(self, dm: BaseDM):
+    def emit_signal_dm(self, dm: BaseDM):
+        # ensure that this is not reprocessed again
+        self.add_to_processed_dms(dm)
+        self.signal_dm.emit(dm)
+
+    def add_to_processed_dms(self, dm: BaseDM):
+        if self.dm_is_alreay_processed(dm):
+            return
         self.processed_dms.append(dm)
+
+    def on_signal_dm(self, dm: BaseDM):
+        self.add_to_processed_dms(dm)
 
     def dm_is_alreay_processed(self, dm: BaseDM) -> bool:
         for item in list(self.processed_dms):
