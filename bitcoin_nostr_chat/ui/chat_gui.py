@@ -32,29 +32,14 @@ import os
 import sys
 from datetime import datetime
 
-from bitcoin_qr_tools.data import Data
-from PyQt6.QtCore import QModelIndex, QSize, Qt, pyqtSignal
-from PyQt6.QtGui import (
-    QAction,
-    QBrush,
-    QColor,
-    QContextMenuEvent,
-    QIcon,
-    QKeySequence,
-    QMouseEvent,
-    QResizeEvent,
-    QShortcut,
-    QStandardItem,
-    QStandardItemModel,
-)
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QBrush, QColor, QResizeEvent
 from PyQt6.QtWidgets import (
     QApplication,
     QFileDialog,
     QHBoxLayout,
     QLineEdit,
-    QListView,
     QMainWindow,
-    QMenu,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -62,176 +47,23 @@ from PyQt6.QtWidgets import (
 
 from bitcoin_nostr_chat.dialogs import file_to_str
 from bitcoin_nostr_chat.signals_min import SignalsMin
+from bitcoin_nostr_chat.ui.chat_component import ChatComponent, FileObject
 from bitcoin_nostr_chat.ui.util import read_QIcon
-
-from ..signals_min import SignalsMin
 
 logger = logging.getLogger(__name__)
 
 
-class ChatListView(QListView):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setSelectionMode(QListView.SelectionMode.ExtendedSelection)
-        # Set up the shortcut for copying (Ctrl+C) within the list view
-        self.copyShortcut = QShortcut(QKeySequence("Ctrl+C"), self)
-        self.copyShortcut.activated.connect(self.copySelectedItemToClipboard)
-
-    def mousePressEvent(self, event: QMouseEvent | None):
-        if event:
-            # Check if the click is on an item by using indexAt()
-            index = self.indexAt(event.position().toPoint())
-            if not index.isValid():
-                self.clearSelection()  # Clear selection if empty space is clicked
-        super().mousePressEvent(event)
-
-    def copySelectedItemToClipboard(self):
-        # Sort the selected indexes by their row (visual order)
-        indexes = sorted(self.selectedIndexes(), key=lambda index: index.row())
-        if indexes:
-            texts = [index.data() for index in indexes]
-            combined_text = "\n".join(texts)
-            clipboard = QApplication.clipboard()
-            if clipboard:
-                clipboard.setText(combined_text)
-                logger.info(f"Copied to clipboard: {combined_text}")
-
-
-class MultiLineListView(QWidget):
-    signal_clear = pyqtSignal()
-
-    ROLE_SORT = 1001
-    itemClicked = pyqtSignal(QStandardItemModel)
-
-    def __init__(self):
-        super().__init__()
-        self.listView = ChatListView(self)
-        self.listView.setWordWrap(True)
-        self.listView.clicked.connect(lambda qmodel_index: self.onItemClicked(qmodel_index))
-
-        self.model = QStandardItemModel(self.listView)
-        self.listView.setModel(self.model)
-
-        # Enable sorting
-        self.model.setSortRole(self.ROLE_SORT)  # Use the display text for sorting
-
-        self._layout = QVBoxLayout(self)
-        self._layout.addWidget(self.listView)
-        self._layout.setContentsMargins(0, 0, 0, 0)  # Left, Top, Right, Bottom margins
-
-    def contextMenuEvent(self, event: QContextMenuEvent | None) -> None:
-        menu = QMenu(self)
-
-        # copy
-        action_copy = QAction(self.tr("Copy"), self)
-        menu.addAction(action_copy)
-        # Connect actions to slots (functions)
-        action_copy.triggered.connect(self.listView.copySelectedItemToClipboard)
-
-        menu.addSeparator()
-
-        # Add actions to the menu
-        action_delete = QAction(self.tr("Clear history"), self)
-        menu.addAction(action_delete)
-        # Connect actions to slots (functions)
-        action_delete.triggered.connect(self.on_delete_all_messages)
-
-        # Pop up the menu at the current mouse position.
-        if event:
-            menu.exec(event.globalPos())
-        super().contextMenuEvent(event)
-
-    def on_delete_all_messages(self):
-        self.clearItems()
-        self.update()
-        self.signal_clear.emit()
-
-    def addItem(self, text: str, created_at: datetime, icon=None) -> QStandardItem:
-        """Add an item with the specified text and an optional icon to the list."""
-        item = QStandardItem()
-        item.setText(text)
-        if icon:
-            item.setIcon(QIcon(icon))
-        item.setEditable(False)
-        self.model.appendRow(item)
-        item.setData(created_at, self.ROLE_SORT)
-
-        # Sort the model initially
-        self.model.sort(0)  # Sort by the first (and only) column
-        self.scroll_to_item(item)
-        return item
-
-    def scroll_to_item(self, item):
-        # Get the index of the item
-        index = self.model.indexFromItem(item)
-        # Scroll to the item
-        self.listView.scrollTo(index, QListView.ScrollHint.EnsureVisible)
-
-    def clearItems(self):
-        """Clear all items from the list."""
-        self.model.clear()
-
-    def getItemTextAtIndex(self, index: QModelIndex):
-        """Get the text of the item at the specified index."""
-        item = self.model.itemFromIndex(index)
-        if item:
-            return item.text()
-        return None
-
-    def onItemClicked(self, index: QModelIndex):
-        self.itemClicked.emit(self.model.itemFromIndex(index))
-
-
-class FileObject:
-    def __init__(self, path: str, data: Data | None = None):
-        self.path = path
-        self.data = data
-
-
-class ChatListWidget(MultiLineListView):
-    ROLE_DATA = 1000
-    signal_attachement_clicked = pyqtSignal(FileObject)
-
-    def __init__(self, parent=None):
-        super().__init__()
-        self.itemClicked.connect(self.onItemClicked)
-
-    def add_file(
-        self, fileObject: FileObject, created_at: datetime, icon_path: str | None = None
-    ) -> QStandardItem:
-        icon = QIcon(icon_path) if icon_path else read_QIcon("clip.svg")
-
-        item = self.addItem(
-            os.path.basename(fileObject.path),
-            icon=icon,
-            created_at=created_at,
-        )
-        item.setData(fileObject, role=self.ROLE_DATA)
-        return item
-
-    def onItemClicked(self, item: QStandardItem):  # type: ignore[override]
-        # Retrieve the FileObject associated with the clicked item
-        fileObject = item.data(self.ROLE_DATA)
-        if fileObject:
-            self.signal_attachement_clicked.emit(fileObject)
-
-    def sizeHint(self):
-        # Get the original size hint from the superclass
-        originalSizeHint = super().sizeHint()
-        # Return a new QSize with the original width and a custom height
-        return QSize(originalSizeHint.width(), 50)  # Keep original width, custom height
-
-
 class ChatGui(QWidget):
+    # signal_set_relay_list = pyqtSignal(ChatDataRelayList)
     signal_on_message_send = pyqtSignal(str)
     signal_share_filecontent = pyqtSignal(str, str)  # file_content, filename
 
     def __init__(self, signals_min: SignalsMin):
         super().__init__()
         self._layout = QVBoxLayout(self)
-        self.chat_list_display = ChatListWidget()
+        self.chat_component = ChatComponent()
         # self._layout.setContentsMargins(0, 0, 0, 0)  # Left, Top, Right, Bottom margins
-        self._layout.addWidget(self.chat_list_display)
+        self._layout.addWidget(self.chat_component)
 
         self.textInput = QLineEdit()
         self.textInput.textChanged.connect(self.textChanged)
@@ -311,7 +143,7 @@ class ChatGui(QWidget):
         # self.add_own(text)
 
     def _add_message(self, text: str, alignment: Qt.AlignmentFlag, color: QColor, created_at: datetime):
-        item = self.chat_list_display.addItem(text, created_at=created_at)
+        item = self.chat_component.addItem(text, created_at=created_at)
         item.setTextAlignment(alignment)
         item.setForeground(QBrush(color))
 
@@ -323,50 +155,31 @@ class ChatGui(QWidget):
         color: QColor,
         created_at: datetime,
     ):
-        item = self.chat_list_display.add_file(file_object, created_at=created_at)
+        item = self.chat_component.add_file(file_object, created_at=created_at, text=text)
         item.setTextAlignment(alignment)
         item.setForeground(QBrush(color))
-        item.setText(text)
 
-    def add_own(
-        self, created_at: datetime, color: QColor, text: str = "", file_object: FileObject | None = None
-    ):
-        if file_object:
-            self._add_file(
-                text=self.tr("Me: {text}").format(text=text),
-                file_object=file_object,
-                alignment=Qt.AlignmentFlag.AlignRight,
-                color=color,
-                created_at=created_at,
-            )
-        else:
-            self._add_message(
-                text=self.tr("Me: {text}").format(text=text),
-                alignment=Qt.AlignmentFlag.AlignRight,
-                color=color,
-                created_at=created_at,
-            )
-
-    def add_other(
+    def add(
         self,
         created_at: datetime,
         color: QColor,
+        is_me: bool,
+        author_name: str,
         text: str = "",
         file_object: FileObject | None = None,
-        other_name: str = "Other",
     ):
         if file_object:
             self._add_file(
-                text=f"{other_name}: {text}",
+                text=f"{author_name}: {text}",
                 file_object=file_object,
-                alignment=Qt.AlignmentFlag.AlignLeft,
+                alignment=Qt.AlignmentFlag.AlignRight if is_me else Qt.AlignmentFlag.AlignLeft,
                 color=color,
                 created_at=created_at,
             )
         else:
             self._add_message(
-                text=f"{other_name}: {text}",
-                alignment=Qt.AlignmentFlag.AlignLeft,
+                text=f"{author_name}: {text}",
+                alignment=Qt.AlignmentFlag.AlignRight if is_me else Qt.AlignmentFlag.AlignLeft,
                 color=color,
                 created_at=created_at,
             )
@@ -386,12 +199,35 @@ if __name__ == "__main__":
             self.chatGui.signal_on_message_send.connect(self.handleMessage)
 
         def handleMessage(self, text):
-            self.chatGui.add_own(datetime.now(), text)
-            # Simulate other party response
-            self.chatGui.add_other(datetime.now(), text)
+
+            self.chatGui.add(
+                datetime.now(),
+                text=f"you said {text}",
+                file_object=None,
+                color=QColor(),
+                is_me=False,
+                author_name="Other",
+            )
+            self.chatGui.add(
+                datetime.now(),
+                text=f"you said {text}",
+                file_object=None,
+                color=QColor(),
+                is_me=False,
+                author_name="Other",
+            )
 
     if __name__ == "__main__":
         app = QApplication(sys.argv)
         demoApp = DemoApp()
         demoApp.show()
+
+        demoApp.chatGui.add(
+            datetime.now(),
+            text=f"sending relay list",
+            file_object=None,
+            color=QColor(),
+            is_me=False,
+            author_name="Other",
+        )
         sys.exit(app.exec())

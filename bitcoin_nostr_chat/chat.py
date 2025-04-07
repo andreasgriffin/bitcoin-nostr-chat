@@ -73,9 +73,9 @@ class BaseChat(QObject):
         self.gui = BitcoinDmChatGui(signals_min=self.signals_min)
 
         # connect signals
-        self.gui.chat_list_display.signal_attachement_clicked.connect(self.signal_attachement_clicked)
+        self.gui.chat_component.signal_attachement_clicked.connect(self.signal_attachement_clicked)
         self.signal_attachement_clicked.connect(self.on_signal_attachement_clicked)
-        self.gui.chat_list_display.signal_clear.connect(self.clear_chat_from_memory)
+        self.gui.chat_component.list_widget.signal_clear.connect(self.clear_chat_from_memory)
 
     def is_me(self, public_key: PublicKey) -> bool:
         return public_key.to_bech32() == self.group_chat.my_public_key().to_bech32()

@@ -60,20 +60,13 @@ class BitcoinDmChatGui(ChatGui):
             elif isinstance(dm.data.data, bdk.PartiallySignedTransaction):
                 text = f"PSBT: {dm.data.data.txid()}"
 
-        if is_me:
-            self.add_own(
-                text=text,
-                file_object=file_object,
-                created_at=dm.created_at if dm.created_at else datetime.now(),
-                color=color,
-            )
-        else:
-            self.add_other(
-                text=text,
-                file_object=file_object,
-                other_name=alias if alias else "Unknown",
-                created_at=dm.created_at if dm.created_at else datetime.now(),
-                color=color,
-            )
+        self.add(
+            is_me=is_me,
+            text=text,
+            file_object=file_object,
+            author_name=self.tr("Me") if is_me else (alias if alias else "Unknown"),
+            created_at=dm.created_at if dm.created_at else datetime.now(),
+            color=color,
+        )
 
         self.dms.append(dm)
