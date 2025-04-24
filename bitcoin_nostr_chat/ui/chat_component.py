@@ -127,6 +127,7 @@ class ChatComponent(QWidget):
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)  # Left, Top, Right, Bottom margins
         # Create our custom list widget, providing self as its owner.
         self.list_widget: ChatListWidget = ChatListWidget()
         self.list_widget.signal_clear.connect(self.clearItems)

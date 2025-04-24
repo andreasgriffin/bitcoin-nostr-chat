@@ -13,7 +13,7 @@ def get_preferred_relays() -> List[str]:
         "wss://nostr.einundzwanzig.space",
         "wss://nostr.vulpem.com",
         "wss://nostr-1.nbo.angani.co",
-        "wss://relay.dwadziesciajeden.pl",
+        "wss://relay.wavlake.com",
     ]
 
 
@@ -22,7 +22,6 @@ def get_default_delays() -> List[str]:
         "wss://nostr.einundzwanzig.space",
         "wss://nostr.vulpem.com",
         "wss://nostr-1.nbo.angani.co",
-        "wss://relay.dwadziesciajeden.pl",
         "wss://nostr.data.haus",
         "wss://relay.nostromo.social",
         "wss://offchain.pub",
