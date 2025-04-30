@@ -71,7 +71,7 @@ nsecshared = nostr_sdk.SecretKey.parse(hashed_twice)
 
 #### `nsecparticipant` announcement
 
-Announcement [messages](https://github.com/andreasgriffin/bitcoin-nostr-chat/blob/bcdeb0659c3bb9dfeec4987d9b228460338fa0f2/bitcoin_nostr_chat/protocol_dm.py#L42) are sent as Nip17 messages to yourself using the `nsecshared`.
+Announcement [messages](https://github.com/andreasgriffin/bitcoin-nostr-chat/blob/bcdeb0659c3bb9dfeec4987d9b228460338fa0f2/bitcoin_nostr_chat/protocol_dm.py#L42) are sent as Nip17 messages to `npubshared` using the `nsecshared` (author and receiver are identical).
 
 Content (with optional compression):
 
@@ -114,15 +114,20 @@ optional fields are:
 - Transaction 
 
   ````python
-   'data': '02000000000101fc236001ebf5172397b92d411bfbf5ff51f08686e2443e248d0c2ed216d6ef070000000000fdffffff012709000000000000160014cbcd06e51299d26952ceed9b22fda644aa7df1220247304402203cb08c4b6b6410ed5b49532059c2ba6f525c2e59bf0edb013f830876f5ee0da702206f8e97552d0f8a6b0359431b58395aa42dc1ca12d26a1b8ca184cfd9e87187ef012102581ea439b4a084c2945eec9b57da1621c5792b4209eab4fd26c284720219ebb7070c0000', 
-    'data_type': 'Tx'
+   "data": { 
+       'data': '02000000000101fc236001ebf5172397b92d411bfbf5ff51f08686e2443e248d0c2ed216d6ef070000000000fdffffff012709000000000000160014cbcd06e51299d26952ceed9b22fda644aa7df1220247304402203cb08c4b6b6410ed5b49532059c2ba6f525c2e59bf0edb013f830876f5ee0da702206f8e97552d0f8a6b0359431b58395aa42dc1ca12d26a1b8ca184cfd9e87187ef012102581ea439b4a084c2945eec9b57da1621c5792b4209eab4fd26c284720219ebb7070c0000', 
+    	'data_type': 'Tx'
+   }
   ````
 
 
 - PSBT 
 
   ````python
-   'data': 'cHNidP8BAJoCAAAA....AAA', 'data_type': 'PSBT'
+  "data": { 
+      'data': 'cHNidP8BAJoCAAAA....AAA', 
+      'data_type': 'PSBT'
+  }
   ````
 
 - More data types and their serialization can be found [here](https://github.com/andreasgriffin/bitcoin-qr-tools/blob/afc9d6c552838d02e48f02abe69905116d372a5d/bitcoin_qr_tools/data.py#L764)
