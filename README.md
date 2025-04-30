@@ -61,19 +61,19 @@ Because `sortedmulti`  descriptors are not unique
 It is derived as:
 
 ````python
-xpubs = ['xpub....', 'xpub....']
-default_key_origin = "m/48h/0h/0h/1h" # using hardened_char="h", not "'"
-total_string = default_key_origin + "".join(sorted(xpubs))
-hashed_once = hashlib.sha256(total_string.encode()).hexdigest()
-hashed_twice = hashlib.sha256(hashed_once.encode()).hexdigest() 
-nsecshared = nostr_sdk.SecretKey.parse(hashed_twice)
+xpubs = ['tpub....', 'tpub....']
+default_key_origin = 'm/84h/1h/0h' 								# using hardened_char="h", not "'"
+total_string = default_key_origin + "".join(sorted(xpubs))		# 'm/84h/1h/0htpub....tpub....'
+hashed_once = hashlib.sha256(total_string.encode()).hexdigest()	# f5e23e3fdf6aa18b97535c22e0f42541fc60a39565faf7127954c80f8ddcc974
+hashed_twice = hashlib.sha256(hashed_once.encode()).hexdigest()	# '1e3526e27654cbe32890b171b4a44db3a8c9fe14f17493dc9af22d4224a3d6a4'
+nsecshared = nostr_sdk.SecretKey.parse(hashed_twice)			# 'nsec1rc6jdcnk2n97x2ysk9cmffzdkw5vnls5796f8hy67gk5yf9r66jq24e366'
 ````
 
 #### `nsecparticipant` announcement
 
-Announcement [messages](https://github.com/andreasgriffin/bitcoin-nostr-chat/blob/bcdeb0659c3bb9dfeec4987d9b228460338fa0f2/bitcoin_nostr_chat/protocol_dm.py#L42) are sent as Nip17 messages to `npubshared` using the `nsecshared` (author and receiver are identical).
+Announcement [messages](https://github.com/andreasgriffin/bitcoin-nostr-chat/blob/bcdeb0659c3bb9dfeec4987d9b228460338fa0f2/bitcoin_nostr_chat/protocol_dm.py#L42) are sent as Nip17 messages to `npubshared` with author `nsecshared` (author and receiver are identical).
 
-Content (with optional compression):
+Content (before optional compression):
 
 ````python
  {"created_at": 1746003358, public_key_bech32:"npubparticipant", }
