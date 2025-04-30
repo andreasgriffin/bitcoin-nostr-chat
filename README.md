@@ -109,7 +109,7 @@ optional fields are:
   - any other optional fields my be included (may be ignored by clients)  in each json line
   - `"__class__": "Label"` is currently required by Bitcoin Safe, however this will be optional in the future
   - `"VERSION": "0.0.3"` is required by Bitcoin Safe, and is important, since it allows for graceful upgrading, which is crucial in a protocol, where all participants are not necessarily on the latest version, and where relays store old messages.
-  - optional fields is "category", e.g.:
+  - optional field `"category"`, e.g.:
     - `'{"__class__": "Label", "VERSION": "0.0.3", "type": "addr", "ref": "tb1q3qt0n3z69sds3u6zxalds3fl67rez4u2vjv6we", "label": "I am an adddress label", "timestamp": 1746003358, "category": "I am a coin category"}'`
 
 - Transaction 
