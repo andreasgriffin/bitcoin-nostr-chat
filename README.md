@@ -136,6 +136,17 @@ Message content:
   }
   ````
 
+- ##### SignMessageRequest
+
+  The format is identical to: https://coldcard.com/docs/message-signing/
+
+  ````python
+  "data": { 
+      'data': '{"msg":"test message", "subpath": "m/84h/0h/0h/0/10","addr_fmt": "p2wpkh"}', 
+      'data_type': 'SignMessageRequest'
+  }
+  ````
+
 - ##### Other data types see [here](https://github.com/andreasgriffin/bitcoin-qr-tools/blob/afc9d6c552838d02e48f02abe69905116d372a5d/bitcoin_qr_tools/data.py#L33) and the serialization [here](https://github.com/andreasgriffin/bitcoin-qr-tools/blob/afc9d6c552838d02e48f02abe69905116d372a5d/bitcoin_qr_tools/data.py#L774)
 
 
