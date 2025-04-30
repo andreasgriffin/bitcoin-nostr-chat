@@ -115,6 +115,7 @@ Message content:
   - other fields may be included (may be ignored by clients)  in each json line
   - optional field `"category"`, e.g.:
     - `'{"__class__": "Label", "VERSION": "0.0.3", "type": "addr", "ref": "tb1q3qt0n3z69sds3u6zxalds3fl67rez4u2vjv6we", "label": "I am an adddress label", "timestamp": 1746003358, "category": "I am a coin category"}'`
+  - Splitting: hundreds of labels (even with compression), can lead to messages exceeding the nostr dm limits. Therefore one can [split](https://github.com/andreasgriffin/bitcoin-safe/blob/1d5959363b718c7b5d593514115bb28dc48740ca/bitcoin_safe/gui/qt/label_syncer.py#L99) the json lines to stay way under the limit.
 
 - ##### Transaction 
 
