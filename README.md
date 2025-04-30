@@ -17,7 +17,7 @@ Export and restoring of the nsec and with it restoration of all messages of the 
 
 # Protocol
 
-### Setup
+## Setup
 
 Each participant creates their own random secret nsec (called `nsecparticipant`).
 
@@ -46,7 +46,7 @@ compressed_message_content = {"created_at": 1746003358}
 
 
 
-### Participant discovery
+## Participant discovery
 
 #### `nsecshared` construction
 
@@ -83,7 +83,7 @@ optional fields are:
 
 - `"please_trust_public_key_bech32": npubother` :  Is  request that `npubother` should check if he trusts `npubparticipant`
 
-### Chat Messages Examples
+## Chat Messages
 
 Once `nsecparticipant` (me) trusts `npubother` I send and receive nip17 messages to/from him.
 
@@ -95,7 +95,7 @@ Message content:
 
 optional fields are:
 
-- Label data (json lines)
+- ##### Label data
 
   ````python
    "data": {
@@ -106,13 +106,13 @@ optional fields are:
   ````
 
   - even though it says `'data_type': 'LabelsBip329'`,  the `"timestamp"` is required, since it is crucial to know if this label update is newer than the one already present in the wallet
-  - any other optional fields my be included (may be ignored by clients)  in each json line
+  - other fields may be included (may be ignored by clients)  in each json line
   - `"__class__": "Label"` is currently required by Bitcoin Safe, however this will be optional in the future
   - `"VERSION": "0.0.3"` is required by Bitcoin Safe, and is important, since it allows for graceful upgrading, which is crucial in a protocol, where all participants are not necessarily on the latest version, and where relays store old messages.
   - optional field `"category"`, e.g.:
     - `'{"__class__": "Label", "VERSION": "0.0.3", "type": "addr", "ref": "tb1q3qt0n3z69sds3u6zxalds3fl67rez4u2vjv6we", "label": "I am an adddress label", "timestamp": 1746003358, "category": "I am a coin category"}'`
 
-- Transaction 
+- ##### Transaction 
 
   ````python
    "data": { 
@@ -122,7 +122,7 @@ optional fields are:
   ````
 
 
-- PSBT 
+- ##### PSBT 
 
   ````python
   "data": { 
@@ -131,7 +131,7 @@ optional fields are:
   }
   ````
 
-- More data types and their serialization can be found [here](https://github.com/andreasgriffin/bitcoin-qr-tools/blob/afc9d6c552838d02e48f02abe69905116d372a5d/bitcoin_qr_tools/data.py#L764)
+- ##### Other data types see [here](https://github.com/andreasgriffin/bitcoin-qr-tools/blob/afc9d6c552838d02e48f02abe69905116d372a5d/bitcoin_qr_tools/data.py#L764)
 
 
 
