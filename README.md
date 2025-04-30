@@ -85,7 +85,7 @@ optional fields are:
 
 ## Chat Messages
 
-Once `nsecparticipant` (me) trusts `npubother` I send and receive nip17 messages to/from him.
+Once `nsecparticipant` (me) trusts `npubother` I send and receive nip17 [messages](https://github.com/andreasgriffin/bitcoin-nostr-chat/blob/a0e16671308822442f313f686174d2c46b6231e2/bitcoin_nostr_chat/bitcoin_dm.py#L61) to/from him.
 
 Message content:
 
@@ -93,7 +93,10 @@ Message content:
  {"created_at": 1746003358, "label":1,  "description": "Hello world"}
 ````
 
-optional fields are:
+* `"label"` is an [enum](https://github.com/andreasgriffin/bitcoin-nostr-chat/blob/a0e16671308822442f313f686174d2c46b6231e2/bitcoin_nostr_chat/bitcoin_dm.py#L46).  `1=GroupChat` (default),   `2=SingleRecipient` is indicating that the message should not be displayed in a group chat window, but is only sent to the single receiver. `3=DistrustMeRequest`  says that `nsecparticipant` is compromised and should not be trusted. `4=DeleteMeRequest`  says that `nsecparticipant` is compromised and it should also be hidden in the participant discovery. 
+* `"description"` is a string that is displayed as a chat message
+
+### Optional fields
 
 - ##### Label data
 
