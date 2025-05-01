@@ -27,13 +27,13 @@ All nostr messages have have optional [compression](https://github.com/andreasgr
 
 #### Compression
 
-All exchanged [messages](https://github.com/andreasgriffin/bitcoin-nostr-chat/blob/bcdeb0659c3bb9dfeec4987d9b228460338fa0f2/bitcoin_nostr_chat/base_dm.py#L50) need to have at least `"created_at"` key with a unix timestamp, to ensure correct ordering of chat messages
+All exchanged [messages](https://github.com/andreasgriffin/bitcoin-nostr-chat/blob/bcdeb0659c3bb9dfeec4987d9b228460338fa0f2/bitcoin_nostr_chat/base_dm.py#L50) need to have at least `"created_at"` key with a unix timestamp (float), to ensure correct ordering of chat messages
 
 ```python
 d = {"created_at": 1746003358}
-cbor_serialized = cbor2.dumps(d)
-compressed_data = zlib.compress(cbor_serialized)
-compressed_message_content = base64.b85encode(compressed_data).decode()
+cbor_serialized = cbor2.dumps(d)	# b'\xa1jcreated_at\x1ah\x11\xe5\x9e'
+compressed_data = zlib.compress(cbor_serialized)	# b'x\x9c[\x98\x95\\\x94\x9aX\x92\x9a\x12\x9fX"\x95!\xf8t\x1e\x00@\x9e\x07.'
+message_content = base64.b85encode(compressed_data).decode()	# 'c${09m0XmXSdy9&pI9Q5A^3D206?AxE&'
 ```
 
 #### No Compression
@@ -41,7 +41,7 @@ compressed_message_content = base64.b85encode(compressed_data).decode()
 Message content example: 
 
 ```python
-compressed_message_content = {"created_at": 1746003358}
+message_content = {"created_at": 1746003358}
 ```
 
 
@@ -86,6 +86,8 @@ optional fields are:
 ## Chat Messages
 
 Once `nsecparticipant` (me) trusts `npubother` I send and receive nip17 [messages](https://github.com/andreasgriffin/bitcoin-nostr-chat/blob/a0e16671308822442f313f686174d2c46b6231e2/bitcoin_nostr_chat/bitcoin_dm.py#L61) to/from him.
+
+- For Nip17 is crucial to unwrap all Nip17 messages to `npubparticipant`  and verify  `npubother == unwrapped_gift.sender()` 
 
 Message content:
 
