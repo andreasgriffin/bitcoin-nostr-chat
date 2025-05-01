@@ -69,6 +69,9 @@ hashed_twice = hashlib.sha256(hashed_once.encode()).hexdigest()	# '1e3526e27654c
 nsecshared = nostr_sdk.SecretKey.parse(hashed_twice)	# 'nsec1rc6jdcnk2n97x2ysk9cmffzdkw5vnls5796f8hy67gk5yf9r66jq24e366'
 ````
 
+- `xpubs` is a list of xpubs occurring in the descriptor
+- `default_key_origin` is the key origin that is standard for the [address type](https://github.com/andreasgriffin/bitcoin-usb/blob/59d4ee5987e48657ae5903f5bbfe982a0be8bfa8/bitcoin_usb/address_types.py#L107) of the wallet.  Example: [p2sh-p2wsh](https://bips.dev/48/): `default_key_origin = "m/48h/0h/0h/1h"`
+
 #### `nsecparticipant` announcement
 
 Announcement [messages](https://github.com/andreasgriffin/bitcoin-nostr-chat/blob/bcdeb0659c3bb9dfeec4987d9b228460338fa0f2/bitcoin_nostr_chat/protocol_dm.py#L42) are sent as Nip17 messages to `npubshared` with author `nsecshared` (author and receiver are identical).
@@ -79,7 +82,7 @@ Content (before optional compression):
  {"created_at": 1746003358, public_key_bech32:"npubparticipant", }
 ````
 
-optional fields are:
+Optional fields are:
 
 - `"please_trust_public_key_bech32": npubother` :  Is  request that `npubother` should check if he trusts `npubparticipant`
 
