@@ -23,11 +23,11 @@ Each participant creates their own random secret nsec (called `nsecparticipant`)
 
 ### Nostr Message Content
 
-All nostr messages have have optional [compression](https://github.com/andreasgriffin/bitcoin-nostr-chat/blob/bcdeb0659c3bb9dfeec4987d9b228460338fa0f2/bitcoin_nostr_chat/base_dm.py#L75) (recommended) for their content. 
+All nostr messages have have optional [compression](https://github.com/andreasgriffin/bitcoin-nostr-chat/blob/5e166054d6a38f3becab0b84d6a8b01c0fcb0fb1/bitcoin_nostr_chat/base_dm.py#L75) (recommended) for their content. 
 
 #### Compression
 
-All exchanged [messages](https://github.com/andreasgriffin/bitcoin-nostr-chat/blob/bcdeb0659c3bb9dfeec4987d9b228460338fa0f2/bitcoin_nostr_chat/base_dm.py#L50) need to have at least `"created_at"` key with a unix timestamp (float), to ensure correct ordering of chat messages
+All exchanged [messages](https://github.com/andreasgriffin/bitcoin-nostr-chat/blob/5e166054d6a38f3becab0b84d6a8b01c0fcb0fb1/bitcoin_nostr_chat/base_dm.py#L50) need to have at least `"created_at"` key with a unix timestamp (float), to ensure correct ordering of chat messages
 
 ```python
 d = {"created_at": 1746003358}
@@ -74,7 +74,7 @@ nsecshared = nostr_sdk.SecretKey.parse(hashed_twice)	# 'nsec1rc6jdcnk2n97x2ysk9c
 
 #### `nsecparticipant` announcement
 
-Announcement [messages](https://github.com/andreasgriffin/bitcoin-nostr-chat/blob/bcdeb0659c3bb9dfeec4987d9b228460338fa0f2/bitcoin_nostr_chat/protocol_dm.py#L42) are sent as Nip17 messages to `npubshared` with author `nsecshared` (author and receiver are identical).
+Announcement [messages](https://github.com/andreasgriffin/bitcoin-nostr-chat/blob/5e166054d6a38f3becab0b84d6a8b01c0fcb0fb1/bitcoin_nostr_chat/annoucement_dm.py#L42) are sent as Nip17 messages to `npubshared` with author `nsecshared` (author and receiver are identical).
 
 Content (before optional compression):
 
@@ -88,7 +88,7 @@ Optional fields are:
 
 ## Chat Messages
 
-Once `nsecparticipant` (me) trusts `npubother` I send and receive nip17 [messages](https://github.com/andreasgriffin/bitcoin-nostr-chat/blob/a0e16671308822442f313f686174d2c46b6231e2/bitcoin_nostr_chat/bitcoin_dm.py#L61) to/from him.
+Once `nsecparticipant` (me) trusts `npubother` I send and receive nip17 [messages](https://github.com/andreasgriffin/bitcoin-nostr-chat/blob/5e166054d6a38f3becab0b84d6a8b01c0fcb0fb1/bitcoin_nostr_chat/chat_dm.py#L61) to/from him.
 
 - For Nip17 is crucial to unwrap all Nip17 messages to `npubparticipant`  and verify  `npubother == unwrapped_gift.sender()` 
 
@@ -98,7 +98,7 @@ Message content:
  {"created_at": 1746003358, "label":1,  "description": "Hello world"}
 ````
 
-* `"label"` is an [enum](https://github.com/andreasgriffin/bitcoin-nostr-chat/blob/a0e16671308822442f313f686174d2c46b6231e2/bitcoin_nostr_chat/bitcoin_dm.py#L46).  `1=GroupChat` (default),   `2=SingleRecipient` is indicating that the message should not be displayed in a group chat window, but is only sent to the single receiver. `3=DistrustMeRequest`  says that `nsecparticipant` is compromised and should not be trusted. `4=DeleteMeRequest`  says that `nsecparticipant` is compromised and it should also be hidden in the participant discovery. 
+* `"label"` is an [enum](https://github.com/andreasgriffin/bitcoin-nostr-chat/blob/5e166054d6a38f3becab0b84d6a8b01c0fcb0fb1/bitcoin_nostr_chat/chat_dm.py#L46).  `1=GroupChat` (default),   `2=SingleRecipient` is indicating that the message should not be displayed in a group chat window, but is only sent to the single receiver. `3=DistrustMeRequest`  says that `nsecparticipant` is compromised and should not be trusted. `4=DeleteMeRequest`  says that `nsecparticipant` is compromised and it should also be hidden in the participant discovery. 
 * `"description"` is a string that is displayed as a chat message
 
 ### Optional fields
