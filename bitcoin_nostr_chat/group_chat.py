@@ -90,7 +90,7 @@ class BaseProtocol(QObject):
         pass
 
     @abstractmethod
-    def from_serialized(self, base85_encoded_data) -> BaseDM:
+    def from_serialized(self, base85_encoded_data: str) -> BaseDM:
         pass
 
     def refresh_dm_connection(
@@ -146,7 +146,7 @@ class NostrProtocol(BaseProtocol):
     def get_currently_allowed(self) -> Set[str]:
         return set([self.my_public_key().to_bech32()])
 
-    def from_serialized(self, base85_encoded_data) -> AccouncementDM:
+    def from_serialized(self, base85_encoded_data: str) -> AccouncementDM:
         return AccouncementDM.from_serialized(base85_encoded_data=base85_encoded_data, network=self.network)
 
     def list_public_keys(self):
