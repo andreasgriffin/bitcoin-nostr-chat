@@ -90,7 +90,8 @@ class BaseDM:
     @classmethod
     def from_dump(cls, decoded_dict: Dict, network: bdk.Network):
         # decode the data from the string and ensure the type is
-        decoded_dict["event"] = Event.from_json(decoded_dict["event"]) if decoded_dict.get("event") else None
+        event = Event.from_json(decoded_dict["event"]) if decoded_dict.get("event") else None
+        decoded_dict["event"] = event
         decoded_dict["author"] = (
             PublicKey.parse(decoded_dict["author"]) if decoded_dict.get("author") else None
         )
@@ -102,7 +103,7 @@ class BaseDM:
                 days=30
             )  # assume the legacy format is at least 30 days old
 
-        logger.info(f" decoded_dict  {decoded_dict}")
+        logger.info(f"decoded_dict  with id={event.id().to_bech32() if event  else None}")
         return cls(**filtered_for_init(decoded_dict, cls))
 
     @classmethod
@@ -110,22 +111,21 @@ class BaseDM:
         if base64_encoded_data.startswith("{"):
             # if it is likely a json string, try this method first
             try:
-                logger.debug(f"from_serialized json {base64_encoded_data}")
+                logger.debug(f"from_serialized json")
                 decoded_dict = json.loads(base64_encoded_data)
                 return cls.from_dump(decoded_dict, network=network)
             except Exception:
                 pass
-                # logger.debug(f"from_serialized: json.loads failed with {base64_encoded_data},  {network}. Trying ")
 
         try:
             # try first the compressed decoding
-            logger.debug(f"from_serialized compressed {base64_encoded_data}")
+            logger.debug(f"from_serialized compressed")
             decoded_data = base64.b85decode(base64_encoded_data)
             decompressed_data = zlib.decompress(decoded_data)
             decoded_dict = cbor2.loads(decompressed_data)
             return cls.from_dump(decoded_dict, network=network)
         except Exception:
-            logger.error(f"from_serialized failed with {base64_encoded_data} ")
+            logger.error(f"from_serialized failed")
             raise
 
     def __str__(self) -> str:
@@ -136,7 +136,6 @@ class BaseDM:
             if bool(self.event) != bool(other.event):
                 return False
             if self.event and other.event and self.event.as_json() != other.event.as_json():
-                # logger.debug(str((self.event.as_json(),  other.event.as_json())))
                 return False
             return True
         return False

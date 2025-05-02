@@ -33,7 +33,7 @@ from bitcoin_qr_tools.data import Data, DataType
 from nostr_sdk import PublicKey
 from PyQt6.QtCore import QObject, pyqtSignal
 
-from .group_chat import BitcoinDM, GroupChat
+from .group_chat import ChatDM, GroupChat
 from .signals_min import SignalsMin
 
 logger = logging.getLogger(__name__)
@@ -56,9 +56,9 @@ class LabelConnector(QObject):
         # connect signals
         self.group_chat.signal_dm.connect(self.on_dm)
 
-    def on_dm(self, dm: BitcoinDM):
+    def on_dm(self, dm: ChatDM):
         if not dm.author:
-            logger.debug(f"Dropping {dm}, because not author, and with that author can be determined.")
+            logger.debug(f"Dropping dm, because {dm.author=}, and with that author can be determined.")
             return
 
         if dm.data and dm.data.data_type == DataType.LabelsBip329:

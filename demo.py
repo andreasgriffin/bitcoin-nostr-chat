@@ -6,21 +6,19 @@ logging.basicConfig(level=logging.DEBUG)
 import argparse
 import hashlib
 import json
+import sys
 from typing import Dict, Optional
 from uuid import uuid4
 
 import bdkpython as bdk
 from nostr_sdk import Keys, SecretKey
 from PyQt6.QtGui import QCloseEvent
+from PyQt6.QtWidgets import QApplication, QMainWindow
 
 from bitcoin_nostr_chat.nostr_sync import NostrSyncWithSingleChats
 from bitcoin_nostr_chat.signals_min import SignalsMin
 
 logger = logging.getLogger(__name__)  # Getting the root logger
-
-import sys
-
-from PyQt6.QtWidgets import QApplication, QMainWindow
 
 
 def save_dict_to_file(dict_obj: Dict, file_path: str):

@@ -66,7 +66,7 @@ def fetch_and_parse_json(url: str) -> Optional[Any]:
     dict or None: Parsed JSON data if successful, None otherwise.
     """
     try:
-        logger.debug(f"fetch_and_parse_json requests.get({url})")
+        logger.debug(f"fetch_and_parse_json requests.get({url=})")
         response = requests.get(url, timeout=2)
         response.raise_for_status()  # Raises an HTTPError if the HTTP request returned an unsuccessful status code
         return response.json()
@@ -116,7 +116,7 @@ class NotificationHandler(HandleNotification):
         signal_dm.connect(self.on_signal_dm)
 
     def is_allowed_message(self, recipient_public_key: PublicKey, author: PublicKey) -> bool:
-        logger.debug(f"recipient_public_key = {recipient_public_key.to_bech32()}   ")
+        logger.debug(f"{recipient_public_key.to_bech32()=}   ")
         if not recipient_public_key:
             logger.debug("recipient_public_key not set")
             return False
@@ -125,20 +125,20 @@ class NotificationHandler(HandleNotification):
             return False
 
         if recipient_public_key.to_bech32() != self.my_keys.public_key().to_bech32():
-            logger.debug("dm is not for me")
+            logger.debug(f"dm is not for me, {recipient_public_key.to_bech32()=}")
             return False
 
         if author.to_bech32() not in self.get_currently_allowed():
-            logger.debug(
-                f"author {author.to_bech32()} is not in get_currently_allowed {self.get_currently_allowed()}"
-            )
+            logger.debug(f"author {author.to_bech32()=} is not in {self.get_currently_allowed()=}")
             return False
 
-        logger.debug(f"valid dm: recipient {recipient_public_key.to_bech32()}, author {author.to_bech32()}")
+        logger.debug(f"valid dm: {recipient_public_key.to_bech32()=}, {author.to_bech32()=}")
         return True
 
     async def handle(self, relay_url: "str", subscription_id: "str", event: "Event"):
-        logger.debug(f"Received new {event.kind().as_enum()} event from {relay_url}:   {event.as_json()}")
+        logger.debug(
+            f"Received new {event.kind().as_enum()} event from {relay_url}:   {event.id().to_bech32()=}"
+        )
         if event.kind().as_enum() == KindEnum.ENCRYPTED_DIRECT_MESSAGE():
             try:
                 self.handle_nip04_event(event)
@@ -160,16 +160,18 @@ class NotificationHandler(HandleNotification):
                     self.untrusted_events.append(event)
                     return
 
-                logger.debug(f"unwrapped_gift {unwrapped_gift} sender={sender}")
+                logger.debug(f"unwrapped_gift inside {event.id().to_bech32()=} , {sender.to_bech32()=}")
                 rumor: UnsignedEvent = unwrapped_gift.rumor()
 
                 # Check timestamp of rumor
                 if rumor.kind().as_enum() == KindEnum.PRIVATE_DIRECT_MESSAGE():
                     msg = rumor.content()
-                    logger.debug(f"Received new msg [sealed]: {msg}")
+                    logger.debug(f"Received new msg [sealed]: inside {event.id().to_bech32()=}")
                     self.handle_trusted_dm_for_me(event, sender, msg)
                 else:
-                    logger.error(f"Do not know how to handle {rumor.kind().as_enum()}.  {rumor.as_json()}")
+                    logger.error(
+                        f"Do not know how to handle {rumor.kind().as_enum()}.  {event.id().to_bech32()=}"
+                    )
             except Exception as e:
                 logger.debug(f"Error during content NIP59 decryption: {e}")
 
@@ -177,7 +179,7 @@ class NotificationHandler(HandleNotification):
         assert event.kind().as_enum() == KindEnum.ENCRYPTED_DIRECT_MESSAGE()
         recipient_public_key = get_recipient_public_key_of_nip04(event)
         if not recipient_public_key:
-            logger.debug(f"event {event.id()} doesnt contain a 04 tag and public key")
+            logger.debug(f"event {event.id().to_bech32()=} doesnt contain a 04 tag and public key")
             return
 
         if not self.is_allowed_message(recipient_public_key=recipient_public_key, author=event.author()):
@@ -185,7 +187,6 @@ class NotificationHandler(HandleNotification):
             return
 
         base64_encoded_data = nip04_decrypt(self.my_keys.secret_key(), event.author(), event.content())
-        # logger.debug(f"Decrypted dm to: {base64_encoded_data}")
         self.handle_trusted_dm_for_me(event, event.author(), base64_encoded_data)
 
     def handle_trusted_dm_for_me(self, event: Event, author: PublicKey, base64_encoded_data: str):
@@ -194,12 +195,12 @@ class NotificationHandler(HandleNotification):
         nostr_dm.author = author
 
         if self.dm_is_alreay_processed(nostr_dm):
-            logger.debug(f"This nostr dm is already in the processed_dms")
+            logger.debug(f"This nostr dm of {event.id().to_bech32()=} is already in the processed_dms")
             return
 
         self.emit_signal_dm(nostr_dm)
 
-        logger.debug(f"Processed dm: {nostr_dm}")
+        logger.debug(f"Processed dm of {event.id().to_bech32()=}")
 
     def emit_signal_dm(self, dm: BaseDM):
         # ensure that this is not reprocessed again
@@ -223,7 +224,6 @@ class NotificationHandler(HandleNotification):
         return False
 
     async def handle_msg(self, relay_url: "str", msg: "RelayMessage"):
-        # logger.debug(f"handle_msg {relay_url}: {msg}")
         return
 
     async def replay_events(

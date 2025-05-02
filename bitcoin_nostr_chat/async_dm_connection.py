@@ -50,14 +50,14 @@ from nostr_sdk import (
 )
 from PyQt6.QtCore import QObject, QTimer, pyqtBoundSignal
 
+from bitcoin_nostr_chat.annoucement_dm import AccouncementDM
 from bitcoin_nostr_chat.base_dm import BaseDM
-from bitcoin_nostr_chat.bitcoin_dm import BitcoinDM
+from bitcoin_nostr_chat.chat_dm import ChatDM
 from bitcoin_nostr_chat.notification_handler import (
     DM_KIND,
     GIFTWRAP,
     NotificationHandler,
 )
-from bitcoin_nostr_chat.protocol_dm import ProtocolDM
 from bitcoin_nostr_chat.relay_list import RelayList
 from bitcoin_nostr_chat.utils import filtered_for_init
 
@@ -120,7 +120,7 @@ class AsyncDmConnection(QObject):
         #         self.task_handle_notifications = None
 
         await client.disconnect()
-        logger.debug(f"disconnect_client {client}")
+        logger.debug(f"disconnect_client {client=}")
 
     async def connect_notification(self):
         await self.ensure_connected_to_relays()
@@ -131,7 +131,7 @@ class AsyncDmConnection(QObject):
 
     def public_key_was_published(self, public_key: PublicKey) -> bool:
         for dm in list(self.notification_handler.processed_dms):
-            if isinstance(dm, ProtocolDM):
+            if isinstance(dm, AccouncementDM):
                 if dm.public_key_bech32 == public_key.to_bech32():
                     return True
         return False
@@ -149,7 +149,7 @@ class AsyncDmConnection(QObject):
         try:
             serialized_dm = dm.serialize()
             send_event_output = await self.client_send.send_private_msg(receiver, serialized_dm)
-            logger.debug(f"sent {dm} with {len(serialized_dm)} characters")
+            logger.debug(f"sent dm to {receiver.to_bech32()=} with {len(serialized_dm)=}")
             return send_event_output.id
         except Exception as e:
             logger.error(f"Error sending direct message: {e}")
@@ -241,11 +241,11 @@ class AsyncDmConnection(QObject):
         forbidden_data_types: List[DataType] | None = None,
     ):
         def include_item(item: BaseDM) -> bool:
-            if isinstance(item, BitcoinDM):
+            if isinstance(item, ChatDM):
                 if forbidden_data_types is not None:
                     if item.data and item.data.data_type in forbidden_data_types:
                         return False
-            if isinstance(item, ProtocolDM):
+            if isinstance(item, AccouncementDM):
                 return False
             return True
 
@@ -274,7 +274,7 @@ class AsyncDmConnection(QObject):
     ) -> "AsyncDmConnection":
         d["keys"] = Keys(secret_key=SecretKey.parse(d["keys"]))
 
-        d["dms_from_dump"] = [BitcoinDM.from_dump(d, network=network) for d in d.get("dms_from_dump", [])]
+        d["dms_from_dump"] = [ChatDM.from_dump(d, network=network) for d in d.get("dms_from_dump", [])]
         d["relay_list"] = RelayList.from_dump(d["relay_list"]) if "relay_list" in d else None
 
         return cls(

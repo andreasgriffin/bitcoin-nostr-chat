@@ -38,7 +38,7 @@ from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox
 
 from bitcoin_nostr_chat import DEFAULT_USE_COMPRESSION
-from bitcoin_nostr_chat.bitcoin_dm import ChatLabel
+from bitcoin_nostr_chat.chat_dm import ChatLabel
 from bitcoin_nostr_chat.dialogs import create_custom_message_box
 from bitcoin_nostr_chat.group_chat import GroupChat
 from bitcoin_nostr_chat.signals_min import SignalsMin
@@ -46,7 +46,7 @@ from bitcoin_nostr_chat.ui.bitcoin_dm_chat_gui import BitcoinDmChatGui
 from bitcoin_nostr_chat.ui.chat_gui import FileObject
 from bitcoin_nostr_chat.ui.util import chat_color, short_key
 
-from .group_chat import BitcoinDM, GroupChat
+from .group_chat import ChatDM, GroupChat
 from .signals_min import SignalsMin
 
 logger = logging.getLogger(__name__)
@@ -54,8 +54,8 @@ logger = logging.getLogger(__name__)
 
 class BaseChat(QObject):
     signal_attachement_clicked = pyqtSignal(FileObject)
-    signal_add_dm_to_chat = pyqtSignal(BitcoinDM)
-    signal_send_dm = pyqtSignal(BitcoinDM)
+    signal_add_dm_to_chat = pyqtSignal(ChatDM)
+    signal_send_dm = pyqtSignal(ChatDM)
 
     def __init__(
         self,
@@ -80,13 +80,13 @@ class BaseChat(QObject):
     def is_me(self, public_key: PublicKey) -> bool:
         return public_key.to_bech32() == self.group_chat.my_public_key().to_bech32()
 
-    def _file_to_dm(self, file_content: str, label: ChatLabel, file_name: str) -> BitcoinDM:
+    def _file_to_dm(self, file_content: str, label: ChatLabel, file_name: str) -> ChatDM:
         bitcoin_data = Data.from_str(file_content, network=self.network)
         if not bitcoin_data:
             raise Exception(
                 self.tr("Could not recognize {file_content} as BitcoinData").format(file_content=file_content)
             )
-        dm = BitcoinDM(
+        dm = ChatDM(
             label=label,
             description=file_name,
             event=None,
@@ -129,10 +129,10 @@ class Chat(BaseChat):
         self.gui.signal_on_message_send.connect(self.on_send_message_in_groupchat)
         self.gui.signal_share_filecontent.connect(self.on_share_file_in_groupchat)
 
-    def add_to_chat(self, dm: BitcoinDM):
+    def add_to_chat(self, dm: ChatDM):
         if not dm.author:
             logger.debug(
-                f"{self.__class__.__name__}: Dropping {dm}, because not author, and with that author can be determined."
+                f"{self.__class__.__name__}: Dropping dm, because {dm.author=}, and with that author can be determined."
             )
             return
 
@@ -155,14 +155,14 @@ class Chat(BaseChat):
             return alias
         return short_key(npub.to_bech32())
 
-    def _send(self, dm: BitcoinDM):
+    def _send(self, dm: ChatDM):
         if self.restrict_to_counterparties:
             self.group_chat.send_to(dm, recipients=self.restrict_to_counterparties)
         else:
             self.group_chat.send(dm)
 
     def on_send_message_in_groupchat(self, text: str):
-        dm = BitcoinDM(
+        dm = ChatDM(
             label=self.send_label,
             description=text,
             event=None,

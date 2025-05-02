@@ -25,8 +25,6 @@
 # ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-
-
 import logging
 from abc import abstractmethod
 from datetime import datetime, timedelta
@@ -38,10 +36,10 @@ from nostr_sdk import EventId, Keys, PublicKey
 from PyQt6.QtCore import QObject, pyqtSignal
 
 from bitcoin_nostr_chat import DEFAULT_USE_COMPRESSION
+from bitcoin_nostr_chat.annoucement_dm import AccouncementDM
 from bitcoin_nostr_chat.base_dm import BaseDM
-from bitcoin_nostr_chat.bitcoin_dm import BitcoinDM, ChatLabel
+from bitcoin_nostr_chat.chat_dm import ChatDM, ChatLabel
 from bitcoin_nostr_chat.dm_connection import DmConnection
-from bitcoin_nostr_chat.protocol_dm import ProtocolDM
 from bitcoin_nostr_chat.relay_list import RelayList
 from bitcoin_nostr_chat.utils import filtered_for_init
 
@@ -124,7 +122,7 @@ class BaseProtocol(QObject):
 
 
 class NostrProtocol(BaseProtocol):
-    signal_dm = pyqtSignal(ProtocolDM)
+    signal_dm = pyqtSignal(AccouncementDM)
 
     def __init__(
         self,
@@ -148,28 +146,28 @@ class NostrProtocol(BaseProtocol):
     def get_currently_allowed(self) -> Set[str]:
         return set([self.my_public_key().to_bech32()])
 
-    def from_serialized(self, base64_encoded_data) -> ProtocolDM:
-        return ProtocolDM.from_serialized(base64_encoded_data=base64_encoded_data, network=self.network)
+    def from_serialized(self, base64_encoded_data) -> AccouncementDM:
+        return AccouncementDM.from_serialized(base64_encoded_data=base64_encoded_data, network=self.network)
 
     def list_public_keys(self):
         pass
 
     def publish_public_key(self, author_public_key: PublicKey, force=False):
-        logger.debug(f"starting publish_public_key {self.my_public_key().to_bech32()}")
+        logger.debug(f"starting publish_public_key {self.my_public_key().to_bech32()=}")
         if not force and self.dm_connection.async_dm_connection.public_key_was_published(author_public_key):
-            logger.debug(f"{author_public_key.to_bech32()} was published already. No need to do it again")
+            logger.debug(f"{author_public_key.to_bech32()=} was published already. No need to do it again")
             return
-        dm = ProtocolDM(
+        dm = AccouncementDM(
             public_key_bech32=author_public_key.to_bech32(),
             event=None,
             use_compression=self.use_compression,
             created_at=datetime.now(),
         )
         self.dm_connection.send(dm, self.my_public_key())
-        logger.debug(f"done publish_public_key {self.my_public_key().to_bech32()}")
+        logger.debug(f"done publish_public_key {self.my_public_key().to_bech32()=}")
 
     def publish_trust_me_back(self, author_public_key: PublicKey, recipient_public_key: PublicKey):
-        dm = ProtocolDM(
+        dm = AccouncementDM(
             public_key_bech32=author_public_key.to_bech32(),
             please_trust_public_key_bech32=recipient_public_key.to_bech32(),
             event=None,
@@ -205,7 +203,7 @@ class NostrProtocol(BaseProtocol):
 
 
 class GroupChat(BaseProtocol):
-    signal_dm = pyqtSignal(BitcoinDM)
+    signal_dm = pyqtSignal(ChatDM)
 
     def __init__(
         self,
@@ -236,32 +234,32 @@ class GroupChat(BaseProtocol):
     def get_currently_allowed(self) -> Set[str]:
         return set([member.to_bech32() for member in self.members_including_me()])
 
-    def from_serialized(self, base64_encoded_data: str) -> BitcoinDM:
-        return BitcoinDM.from_serialized(base64_encoded_data, network=self.network)
+    def from_serialized(self, base64_encoded_data: str) -> ChatDM:
+        return ChatDM.from_serialized(base64_encoded_data, network=self.network)
 
     def add_member(self, new_member: PublicKey):
         if new_member.to_bech32() not in [k.to_bech32() for k in self.members]:
             self.members.append(new_member)
             # because NIP17, i only need to watch stuff that goes to me, no matter from whom
             # self.dm_connection.subscribe( new_member)
-            logger.debug(f"Add {new_member.to_bech32()} as trusted")
+            logger.debug(f"Add {new_member.to_bech32()=} as trusted")
 
     def remove_member(self, remove_member: PublicKey):
         members_bech32 = [k.to_bech32() for k in self.members]
         if remove_member.to_bech32() in members_bech32:
             self.members.pop(members_bech32.index(remove_member.to_bech32()))
             self.dm_connection.unsubscribe([remove_member])
-            logger.debug(f"Removed {remove_member.to_bech32()}")
+            logger.debug(f"Removed {remove_member.to_bech32()=}")
 
-    def _send_copy_to_myself(self, dm: BitcoinDM, receiver: PublicKey, send_to_other_event_id: EventId):
+    def _send_copy_to_myself(self, dm: ChatDM, receiver: PublicKey, send_to_other_event_id: EventId):
         logger.debug(
-            f"Successfully sent to {receiver.to_bech32()} (eventid = {send_to_other_event_id}) and now send copy to myself"
+            f"Successfully sent to {receiver.to_bech32()=} ({send_to_other_event_id=}) and now send copy to myself"
         )
-        copy_dm = BitcoinDM.from_dump(dm.dump(), network=self.network)
+        copy_dm = ChatDM.from_dump(dm.dump(), network=self.network)
         copy_dm.event = None
         self.dm_connection.send(copy_dm, receiver=self.my_public_key())
 
-    def send_to(self, dm: BitcoinDM, recipients: List[PublicKey], send_also_to_me=True):
+    def send_to(self, dm: ChatDM, recipients: List[PublicKey], send_also_to_me=True):
         for public_key in recipients:
             on_done = None
             if send_also_to_me and public_key == self.members[-1]:
@@ -269,13 +267,13 @@ class GroupChat(BaseProtocol):
                 # such that, if the last recipient gets it, then i get a copy too
                 on_done = lambda event_id: self._send_copy_to_myself(dm, public_key, event_id)
             self.dm_connection.send(dm, public_key, on_done=on_done)
-            logger.debug(f"Send to {public_key.to_bech32()}")
+            logger.debug(f"Send to {public_key.to_bech32()=}")
 
         if not self.members:
             logger.debug(f"{self.members=}, so sending to myself only")
             self.dm_connection.send(dm, receiver=self.my_public_key())
 
-    def send(self, dm: BitcoinDM, send_also_to_me=True):
+    def send(self, dm: ChatDM, send_also_to_me=True):
         self.send_to(dm=dm, recipients=self.members, send_also_to_me=send_also_to_me)
 
     def members_including_me(self):
@@ -318,7 +316,7 @@ class GroupChat(BaseProtocol):
             # before you reset the connection
             self.dm_connection.async_thread.run_coroutine_blocking(
                 self.dm_connection.async_dm_connection.send(
-                    BitcoinDM(
+                    ChatDM(
                         event=None,
                         label=ChatLabel.DeleteMeRequest,
                         description="",

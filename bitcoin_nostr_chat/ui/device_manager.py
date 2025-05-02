@@ -179,7 +179,7 @@ class DeviceList(QListWidget, Generic[T]):
 
     def add_list_item(self, device_item: T):
         if self.get_device(device_item.pub_key_bech32):
-            logger.debug(f"Duplicate {device_item.pub_key_bech32}")
+            logger.debug(f"Duplicate {device_item.pub_key_bech32=}")
             return
 
         list_item = QListWidgetItem()
