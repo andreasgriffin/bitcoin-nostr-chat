@@ -42,8 +42,8 @@ def send_dms_to_self(qtbot: QtBot, relays: List[str], raise_error: bool):
     successful_relays = []
 
     dm_connections: List[DmConnection] = []
-    for relay in relays:
-        logger.info(f"*" * 50)
+    for i, relay in enumerate(relays):
+        logger.info(f"{round(i/len(relays)*100)}%  " + f"*" * 50)
         logger.info(f"relay: {relay}")
 
         dm_connection = DmConnection(
