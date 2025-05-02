@@ -58,7 +58,7 @@ class ChatLabel(enum.Enum):
         return cls._member_map_.get(name)
 
 
-class BitcoinDM(BaseDM):
+class ChatDM(BaseDM):
     def __init__(
         self,
         label: ChatLabel,
@@ -85,7 +85,7 @@ class BitcoinDM(BaseDM):
         return self.delete_none_entries(d)
 
     @classmethod
-    def from_dump(cls, d: Dict, network: bdk.Network) -> "BitcoinDM":
+    def from_dump(cls, d: Dict, network: bdk.Network) -> "ChatDM":
         d["label"] = ChatLabel.from_value(d.get("label", ChatLabel.GroupChat.value))
         d["data"] = Data.from_dump(d["data"], network=network) if d.get("data") else None
         return super().from_dump(d, network)
@@ -93,7 +93,7 @@ class BitcoinDM(BaseDM):
     def __eq__(self, other) -> bool:
         if not super().__eq__(other):
             return False
-        if isinstance(other, BitcoinDM):
+        if isinstance(other, ChatDM):
             if self.label != other.label:
                 return False
             if self.description != other.description:

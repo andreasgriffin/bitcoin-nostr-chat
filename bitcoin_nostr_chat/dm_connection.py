@@ -26,7 +26,6 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-
 import logging
 from collections import deque
 from datetime import datetime
@@ -40,7 +39,7 @@ from PyQt6.QtCore import QObject, pyqtBoundSignal
 from bitcoin_nostr_chat.async_dm_connection import AsyncDmConnection
 from bitcoin_nostr_chat.async_thread import AsyncThread
 from bitcoin_nostr_chat.base_dm import BaseDM
-from bitcoin_nostr_chat.bitcoin_dm import BitcoinDM
+from bitcoin_nostr_chat.chat_dm import ChatDM
 from bitcoin_nostr_chat.relay_list import RelayList
 from bitcoin_nostr_chat.utils import filtered_for_init
 
@@ -55,7 +54,7 @@ class DmConnection(QObject):
         keys: Keys,
         get_currently_allowed: Callable[[], Set[str]],
         use_timer: bool = False,
-        dms_from_dump: deque[BitcoinDM] | None = None,
+        dms_from_dump: deque[ChatDM] | None = None,
         relay_list: RelayList | None = None,
         async_dm_connection: AsyncDmConnection | None = None,
         parent: QObject | None = None,
@@ -65,7 +64,7 @@ class DmConnection(QObject):
         self.async_thread = AsyncThread(parent=self)
         self.async_thread.result_ready.connect(
             lambda result, coro_func, callback: (
-                callback(result) if callback else (logger.debug(f"Finished {coro_func} with result {result}"))
+                callback(result) if callback else (logger.debug(f"Finished {coro_func}"))
             )
         )
 

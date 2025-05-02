@@ -9,7 +9,7 @@ from PyQt6.QtCore import QCoreApplication, QObject, pyqtSignal
 from pytestqt.qtbot import QtBot
 
 from bitcoin_nostr_chat.default_relays import get_default_delays, get_preferred_relays
-from bitcoin_nostr_chat.group_chat import BitcoinDM, ChatLabel, DmConnection, RelayList
+from bitcoin_nostr_chat.group_chat import ChatDM, ChatLabel, DmConnection, RelayList
 
 logger = logging.getLogger(__name__)
 
@@ -28,24 +28,22 @@ logger = logging.getLogger(__name__)
 
 
 class DummyClass(QObject):
-    signal_dm = pyqtSignal(BitcoinDM)
+    signal_dm = pyqtSignal(ChatDM)
 
 
 def send_dms_to_self(qtbot: QtBot, relays: List[str], raise_error: bool):
     network = bdk.Network.REGTEST
 
     test_instance_recipient = DummyClass()
-    from_serialized = lambda base64_encoded_data: BitcoinDM.from_serialized(
-        base64_encoded_data, network=network
-    )
+    from_serialized = lambda base85_encoded_data: ChatDM.from_serialized(base85_encoded_data, network=network)
     keys = Keys.generate()
     get_currently_allowed = lambda: set([keys.public_key().to_bech32()])
 
     successful_relays = []
 
     dm_connections: List[DmConnection] = []
-    for relay in relays:
-        logger.info(f"*" * 50)
+    for i, relay in enumerate(relays):
+        logger.info(f"{round(i/len(relays)*100)}%  " + f"*" * 50)
         logger.info(f"relay: {relay}")
 
         dm_connection = DmConnection(
@@ -57,13 +55,13 @@ def send_dms_to_self(qtbot: QtBot, relays: List[str], raise_error: bool):
         )
         dm_connection.subscribe()
         dm_connections.append(dm_connection)
-        dm = BitcoinDM(
+        dm = ChatDM(
             label=ChatLabel.GroupChat,
             created_at=datetime.now(),
             description=f"Test: {relay}",
         )
 
-        def add_to_chat(dm: BitcoinDM):
+        def add_to_chat(dm: ChatDM):
             logger.info(f"Success: {dm.description}")
             successful_relays.append(relay)
 

@@ -39,7 +39,7 @@ from bitcoin_nostr_chat.base_dm import BaseDM
 logger = logging.getLogger(__name__)
 
 
-class ProtocolDM(BaseDM):
+class AccouncementDM(BaseDM):
     def __init__(
         self,
         public_key_bech32: str,
@@ -59,7 +59,7 @@ class ProtocolDM(BaseDM):
     def __eq__(self, other) -> bool:
         if not super().__eq__(other):
             return False
-        if isinstance(other, ProtocolDM):
+        if isinstance(other, AccouncementDM):
             return (
                 self.public_key_bech32 == other.public_key_bech32
                 and self.please_trust_public_key_bech32 == other.please_trust_public_key_bech32

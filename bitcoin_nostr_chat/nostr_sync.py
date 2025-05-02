@@ -38,11 +38,11 @@ from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox
 
 from bitcoin_nostr_chat import DEFAULT_USE_COMPRESSION
-from bitcoin_nostr_chat.bitcoin_dm import BitcoinDM, ChatLabel
+from bitcoin_nostr_chat.annoucement_dm import AccouncementDM
+from bitcoin_nostr_chat.chat_dm import ChatDM, ChatLabel
 from bitcoin_nostr_chat.dialogs import SecretKeyDialog, create_custom_message_box
 from bitcoin_nostr_chat.group_chat import GroupChat, NostrProtocol
 from bitcoin_nostr_chat.label_connector import LabelConnector
-from bitcoin_nostr_chat.protocol_dm import ProtocolDM
 from bitcoin_nostr_chat.relay_list import RelayList
 from bitcoin_nostr_chat.signals_min import SignalsMin
 from bitcoin_nostr_chat.ui.util import chat_color, get_input_text, short_key
@@ -264,9 +264,9 @@ class BaseNostrSync(QObject):
     def publish_my_key_in_protocol(self, force=False):
         self.nostr_protocol.publish_public_key(self.group_chat.my_public_key(), force=force)
 
-    def on_dm(self, dm: BitcoinDM):
+    def on_dm(self, dm: ChatDM):
         if not dm.author:
-            logger.debug(f"Dropping {dm}, because not author, and with that author can be determined.")
+            logger.debug(f"Dropping dm, because {dm.author=}, and with that author can be determined.")
             return
 
         elif dm.label == ChatLabel.DistrustMeRequest and not self.is_me(dm.author):
@@ -279,7 +279,7 @@ class BaseNostrSync(QObject):
         self.ui.device_manager.untrust(member.to_bech32())
         self.group_chat.remove_member(member)
 
-    def get_singlechat_counterparty(self, dm: BitcoinDM) -> Optional[str]:
+    def get_singlechat_counterparty(self, dm: ChatDM) -> Optional[str]:
         if dm.label != ChatLabel.SingleRecipient:
             return None
 
@@ -296,13 +296,13 @@ class BaseNostrSync(QObject):
         else:
             return dm.author.to_bech32()
 
-    def file_to_dm(self, file_content: str, label: ChatLabel, file_name: str) -> BitcoinDM:
+    def file_to_dm(self, file_content: str, label: ChatLabel, file_name: str) -> ChatDM:
         bitcoin_data = Data.from_str(file_content, network=self.network)
         if not bitcoin_data:
             raise Exception(
                 self.tr("Could not recognize {file_content} as BitcoinData").format(file_content=file_content)
             )
-        dm = BitcoinDM(
+        dm = ChatDM(
             label=label,
             description=file_name,
             event=None,
@@ -312,7 +312,7 @@ class BaseNostrSync(QObject):
         )
         return dm
 
-    def on_signal_protocol_dm(self, dm: ProtocolDM):
+    def on_signal_protocol_dm(self, dm: AccouncementDM):
         if self.is_me(PublicKey.parse(dm.public_key_bech32)):
             # if I'm the autor do noting
             return
