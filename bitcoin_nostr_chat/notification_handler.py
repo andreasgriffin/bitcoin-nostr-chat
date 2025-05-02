@@ -186,11 +186,11 @@ class NotificationHandler(HandleNotification):
             self.untrusted_events.append(event)
             return
 
-        base64_encoded_data = nip04_decrypt(self.my_keys.secret_key(), event.author(), event.content())
-        self.handle_trusted_dm_for_me(event, event.author(), base64_encoded_data)
+        base85_encoded_data = nip04_decrypt(self.my_keys.secret_key(), event.author(), event.content())
+        self.handle_trusted_dm_for_me(event, event.author(), base85_encoded_data)
 
-    def handle_trusted_dm_for_me(self, event: Event, author: PublicKey, base64_encoded_data: str):
-        nostr_dm: BaseDM = self.from_serialized(base64_encoded_data)
+    def handle_trusted_dm_for_me(self, event: Event, author: PublicKey, base85_encoded_data: str):
+        nostr_dm: BaseDM = self.from_serialized(base85_encoded_data)
         nostr_dm.event = event
         nostr_dm.author = author
 

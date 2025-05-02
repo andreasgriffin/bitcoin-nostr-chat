@@ -90,7 +90,7 @@ class BaseProtocol(QObject):
         pass
 
     @abstractmethod
-    def from_serialized(self, base64_encoded_data) -> BaseDM:
+    def from_serialized(self, base85_encoded_data) -> BaseDM:
         pass
 
     def refresh_dm_connection(
@@ -146,8 +146,8 @@ class NostrProtocol(BaseProtocol):
     def get_currently_allowed(self) -> Set[str]:
         return set([self.my_public_key().to_bech32()])
 
-    def from_serialized(self, base64_encoded_data) -> AccouncementDM:
-        return AccouncementDM.from_serialized(base64_encoded_data=base64_encoded_data, network=self.network)
+    def from_serialized(self, base85_encoded_data) -> AccouncementDM:
+        return AccouncementDM.from_serialized(base85_encoded_data=base85_encoded_data, network=self.network)
 
     def list_public_keys(self):
         pass
@@ -234,8 +234,8 @@ class GroupChat(BaseProtocol):
     def get_currently_allowed(self) -> Set[str]:
         return set([member.to_bech32() for member in self.members_including_me()])
 
-    def from_serialized(self, base64_encoded_data: str) -> ChatDM:
-        return ChatDM.from_serialized(base64_encoded_data, network=self.network)
+    def from_serialized(self, base85_encoded_data: str) -> ChatDM:
+        return ChatDM.from_serialized(base85_encoded_data, network=self.network)
 
     def add_member(self, new_member: PublicKey):
         if new_member.to_bech32() not in [k.to_bech32() for k in self.members]:

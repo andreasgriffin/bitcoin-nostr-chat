@@ -35,7 +35,7 @@ def send_dms_to_self(qtbot: QtBot, relays: List[str], raise_error: bool):
     network = bdk.Network.REGTEST
 
     test_instance_recipient = DummyClass()
-    from_serialized = lambda base64_encoded_data: ChatDM.from_serialized(base64_encoded_data, network=network)
+    from_serialized = lambda base85_encoded_data: ChatDM.from_serialized(base85_encoded_data, network=network)
     keys = Keys.generate()
     get_currently_allowed = lambda: set([keys.public_key().to_bech32()])
 

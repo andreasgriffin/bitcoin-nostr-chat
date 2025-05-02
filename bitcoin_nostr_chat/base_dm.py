@@ -81,9 +81,9 @@ class BaseDM:
             # and then use base85 to (hopefully) use the space as best as possible
             cbor_serialized = cbor2.dumps(d)
             compressed_data = zlib.compress(cbor_serialized)
-            base64_encoded_data = base64.b85encode(compressed_data).decode()
+            base85_encoded_data = base64.b85encode(compressed_data).decode()
             logger.debug(f"{100*(1-len(compressed_data)/(1+len(cbor_serialized))):.1f}% compression")
-            return base64_encoded_data
+            return base85_encoded_data
         else:
             return json.dumps(d)
 
@@ -107,12 +107,12 @@ class BaseDM:
         return cls(**filtered_for_init(decoded_dict, cls))
 
     @classmethod
-    def from_serialized(cls, base64_encoded_data: str, network: bdk.Network):
-        if base64_encoded_data.startswith("{"):
+    def from_serialized(cls, base85_encoded_data: str, network: bdk.Network):
+        if base85_encoded_data.startswith("{"):
             # if it is likely a json string, try this method first
             try:
                 logger.debug(f"from_serialized json")
-                decoded_dict = json.loads(base64_encoded_data)
+                decoded_dict = json.loads(base85_encoded_data)
                 return cls.from_dump(decoded_dict, network=network)
             except Exception:
                 pass
@@ -120,7 +120,7 @@ class BaseDM:
         try:
             # try first the compressed decoding
             logger.debug(f"from_serialized compressed")
-            decoded_data = base64.b85decode(base64_encoded_data)
+            decoded_data = base64.b85decode(base85_encoded_data)
             decompressed_data = zlib.decompress(decoded_data)
             decoded_dict = cbor2.loads(decompressed_data)
             return cls.from_dump(decoded_dict, network=network)
