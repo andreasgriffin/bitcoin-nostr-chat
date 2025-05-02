@@ -45,7 +45,7 @@ files = [
 
 [[package]]
 name = "bitcoin-qr-tools"
-version = "1.3.0"
+version = "2.0.0"
 description = "Python bitcoin qr reader and generator"
 optional = false
 python-versions = ">=3.9,<3.13"
@@ -69,8 +69,8 @@ segno = "1.6.1"
 [package.source]
 type = "git"
 url = "https://github.com/andreasgriffin/bitcoin-qr-tools.git"
-reference = "33d9bb18007b3e499242be7ec4475aa6248069ab"
-resolved_reference = "33d9bb18007b3e499242be7ec4475aa6248069ab"
+reference = "24e4392f0a2e4eb3c4cbf61a4e5b44eeac17fcf4"
+resolved_reference = "24e4392f0a2e4eb3c4cbf61a4e5b44eeac17fcf4"
 
 [[package]]
 name = "cbor2"
@@ -1190,13 +1190,13 @@ files = [
 
 [[package]]
 name = "setuptools"
-version = "79.0.1"
+version = "80.1.0"
 description = "Easily download, build, install, upgrade, and uninstall Python packages"
 optional = false
 python-versions = ">=3.9"
 files = [
-    {file = "setuptools-79.0.1-py3-none-any.whl", hash = "sha256:e147c0549f27767ba362f9da434eab9c5dc0045d5304feb602a0af001089fc51"},
-    {file = "setuptools-79.0.1.tar.gz", hash = "sha256:128ce7b8f33c3079fd1b067ecbb4051a66e8526e7b65f6cec075dfc650ddfa88"},
+    {file = "setuptools-80.1.0-py3-none-any.whl", hash = "sha256:ea0e7655c05b74819f82e76e11a85b31779fee7c4969e82f72bab0664e8317e4"},
+    {file = "setuptools-80.1.0.tar.gz", hash = "sha256:2e308396e1d83de287ada2c2fd6e64286008fe6aca5008e0b6a8cb0e2c86eedd"},
 ]
 
 [package.extras]
@@ -1326,4 +1326,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.9,<3.13"
-content-hash = "f4ec07796f7a0ddb38f352af1e93066064e8ff42696e660eab8b4f5e111f83b0"
+content-hash = "ab52c47dd02faddc3dba37d21ca6e25e410a7285f27300a2d0bf4844b4d7ead4"
