@@ -33,6 +33,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 
 from bitcoin_qr_tools.data import Data
+from bitcoin_tools.util import insert_invisible_spaces_for_wordwrap
 from PyQt6.QtCore import QPoint, Qt, pyqtSignal
 from PyQt6.QtGui import QIcon, QKeyEvent
 from PyQt6.QtWidgets import (
@@ -48,7 +49,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from bitcoin_nostr_chat.ui.util import insert_invisible_spaces_for_wordwrap, read_QIcon
+from .util import svg_tools
 
 
 class FileObject:
@@ -187,7 +188,7 @@ class ChatComponent(QWidget):
         Adds a file entry. It displays the file's basename and adds a standard file icon.
         """
         text = text if text else os.path.basename(file.path)
-        icon = QIcon(icon_path) if icon_path else read_QIcon("clip.svg")
+        icon = QIcon(icon_path) if icon_path else svg_tools.get_QIcon("bi--upload.svg")
         item = self.addItem(text, created_at, icon)
         item.setData(ChatListWidget.ROLE_DATA, file)
 

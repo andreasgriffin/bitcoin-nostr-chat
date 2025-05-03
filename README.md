@@ -97,6 +97,10 @@ Optional fields are:
 
 - `"please_trust_public_key_bech32": npubother` :  Is  request that `npubother` should check if he trusts `npubparticipant`. Recommended use: `npubparticipant` just marked  `npubother` as trusted and sends `"please_trust_public_key_bech32": npubother`.  `npubother`  can now get a visual notification that  `npubparticipant` requests his trust.   One way to visualize this request is to highlight `npubparticipant`  temporarily. 
 
+#### Receiving announcement messages
+
+When receiving an announcement message, one needs to verify that the sender signed with `nsecshared`, to ensure only participants know the shared secret.
+
 ## Chat Messages
 
 Once `nsecparticipant` (me) trusts `npubother` I send and receive nip17 [messages](https://github.com/andreasgriffin/bitcoin-nostr-chat/blob/5e166054d6a38f3becab0b84d6a8b01c0fcb0fb1/bitcoin_nostr_chat/chat_dm.py#L61) to/from him.
@@ -328,7 +332,7 @@ It is crucial to separate **announcements**  from **group chat**.  Bitcoin Safe 
 - I announce my public key by sending the "`npubparticipant` announcement" message to `npubshared`
 - **Subscription1** listens to messages sent to `npubshared` 
   - I announce my `npubparticipant`
-  - If I receive a message that announces `npubother` one can add it to an `untrusted` list
+  - If I receive a message that announces `npubother`, and verify the signature is from `nsecshared`, one can add it to an `untrusted` list
 
 * The application now presents the option to the user to trust  `npubother`
   * Once trusted, `npubother` is removed from the `untrusted` list and added to the `member` list. The `member` list is a locally stored list and not shared with anyone. The user has the option to remove a member at any time.

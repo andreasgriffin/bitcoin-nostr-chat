@@ -1,63 +1,21 @@
-import hashlib
-import os
-from pathlib import Path
+from bitcoin_tools.gui.qt.icons import SvgTools
+from bitcoin_tools.gui.qt.util import is_dark_mode
+from bitcoin_tools.util import hash_string
+from PyQt6.QtGui import QColor, QKeySequence, QShortcut
+from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QLineEdit, QVBoxLayout
 
-from PyQt6.QtGui import QColor, QIcon, QKeySequence, QPalette, QShortcut
-from PyQt6.QtWidgets import (
-    QApplication,
-    QDialog,
-    QDialogButtonBox,
-    QLineEdit,
-    QVBoxLayout,
-)
+from bitcoin_nostr_chat.utils import resource_path
 
 
-def resource_path(*parts):
-    pkg_dir = os.path.split(os.path.realpath(__file__))[0]
-    return os.path.join(pkg_dir, *parts)
+def get_icon_path(icon_basename: str) -> str:
+    return resource_path("ui", "icons", icon_basename)
 
 
-def resource_path_auto_darkmode(*parts: str):
-    if is_dark_mode():
-        filename = parts[-1]
-        name, extension = os.path.splitext(filename)
-        modified_parts = list(parts)[:-1] + [f"{name}_darkmode{extension}"]
-        combined_path = resource_path(*modified_parts)
-        if Path(combined_path).exists():
-            return combined_path
-
-    return resource_path(*parts)
-
-
-def icon_path(icon_basename: str):
-    return resource_path_auto_darkmode("icons", icon_basename)
-
-
-def read_QIcon(icon_basename: str) -> QIcon:
-    if not icon_basename:
-        return QIcon()
-    return QIcon(icon_path(icon_basename))
+svg_tools = SvgTools(get_icon_path=get_icon_path, theme_file=get_icon_path("theme.csv"))
 
 
 def short_key(pub_key_bech32: str):
     return f"{pub_key_bech32[:12]}"
-
-
-def is_dark_mode() -> bool:
-    app = QApplication.instance()
-    if not isinstance(app, QApplication):
-        return False
-
-    palette = app.palette()
-    background_color = palette.color(QPalette.ColorRole.Window)
-    text_color = palette.color(QPalette.ColorRole.WindowText)
-
-    # Check if the background color is darker than the text color
-    return background_color.lightness() < text_color.lightness()
-
-
-def hash_string(text: str) -> str:
-    return hashlib.sha256(str(text).encode()).hexdigest()
 
 
 def chat_color(pubkey: str) -> QColor:
@@ -105,28 +63,3 @@ def get_input_text(placeholder_text: str, title: str, textcolor: QColor) -> str:
 
     # Return the text that the user entered
     return line_edit.text()
-
-
-def insert_invisible_spaces_for_wordwrap(s: str, max_word_length: int = 20) -> str:
-    """
-    Insert zero-width spaces (\u200B) into any word in `s` that exceeds max_word_length,
-    so that it can be wrapped by browsers or text renderers.
-
-    :param s: Input string.
-    :param max_word_length: Maximum allowed length of a continuous word before inserting \u200B.
-    :return: Modified string with \u200B inserted into long words.
-    """
-    words = s.split(" ")
-    processed = []
-
-    for word in words:
-        if len(word) <= max_word_length:
-            # Short enough, leave as-is
-            processed.append(word)
-        else:
-            # Break the word into chunks of max_word_length
-            parts = [word[i : i + max_word_length] for i in range(0, len(word), max_word_length)]
-            # Rejoin with zero-width spaces between chunks
-            processed.append("\u200B".join(parts))
-
-    return " ".join(processed)

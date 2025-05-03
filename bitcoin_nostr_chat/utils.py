@@ -1,4 +1,10 @@
+import os
 from typing import Callable, Dict, Iterable, Type
+
+
+def resource_path(*parts):
+    pkg_dir = os.path.split(os.path.realpath(__file__))[0]
+    return os.path.join(pkg_dir, *parts)
 
 
 def varnames(method: Callable) -> Iterable[str]:
