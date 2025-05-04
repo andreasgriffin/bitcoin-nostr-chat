@@ -48,7 +48,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from bitcoin_nostr_chat.ui.util import read_QIcon
+from bitcoin_nostr_chat.ui.util import insert_invisible_spaces_for_wordwrap, read_QIcon
 
 
 class FileObject:
@@ -60,8 +60,8 @@ class FileObject:
 class SortedListWidgetItem(QListWidgetItem):
     def __lt__(self, other: QListWidgetItem) -> bool:
         # Retrieve the stored creation datetime using the custom role.
-        self_dt = self.data(ChatComponent.ROLE_SORT)
-        other_dt = other.data(ChatComponent.ROLE_SORT)
+        self_dt = self.data(ChatListWidget.ROLE_SORT)
+        other_dt = other.data(ChatListWidget.ROLE_SORT)
         if isinstance(self_dt, datetime) and isinstance(other_dt, datetime):
             return self_dt < other_dt
         # Fallback to string comparison if datetimes are not available.
@@ -69,6 +69,13 @@ class SortedListWidgetItem(QListWidgetItem):
 
 
 class ChatListWidget(QListWidget):
+    #  role for storing additional data
+    ROLE_DATA: int = 1000
+
+    # Custom data role used to store the datetime the item was created.
+    ROLE_SORT: int = 1001
+    ROLE_CLIPBOARD: int = 1002
+
     signal_clear = pyqtSignal()
 
     def __init__(
@@ -93,7 +100,7 @@ class ChatListWidget(QListWidget):
         # Iterate over items in display order.
         for i in range(self.count()):
             if (item := self.item(i)) and item.isSelected():
-                texts.append(item.text())
+                texts.append(str(item.data(ChatListWidget.ROLE_CLIPBOARD)))
         combined_text: str = "\n".join(texts)
         clipboard = QApplication.clipboard()
         if clipboard:
@@ -118,18 +125,12 @@ class ChatComponent(QWidget):
     # New signal emitted when an attachment is clicked
     signal_attachement_clicked = pyqtSignal(FileObject)
 
-    #  role for storing additional data
-    ROLE_DATA: int = 1000
-
-    # Custom data role used to store the datetime the item was created.
-    ROLE_SORT: int = 1001
-
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)  # Left, Top, Right, Bottom margins
         # Create our custom list widget, providing self as its owner.
-        self.list_widget: ChatListWidget = ChatListWidget()
+        self.list_widget = ChatListWidget()
         self.list_widget.signal_clear.connect(self.clearItems)
         self.list_widget.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
         self.list_widget.setWordWrap(True)
@@ -142,7 +143,7 @@ class ChatComponent(QWidget):
 
     def on_item_clicked(self, item: QListWidgetItem) -> None:
         self.itemClicked.emit(item)
-        file_obj: Optional[FileObject] = item.data(self.ROLE_DATA)
+        file_obj: Optional[FileObject] = item.data(ChatListWidget.ROLE_DATA)
         if file_obj is not None:
             self.signal_attachement_clicked.emit(file_obj)
 
@@ -152,8 +153,9 @@ class ChatComponent(QWidget):
         and optionally sets an icon. The item is automatically sorted.
         """
         item = SortedListWidgetItem()
-        item.setText(text)
-        item.setData(self.ROLE_SORT, created_at)
+        item.setText(insert_invisible_spaces_for_wordwrap(text))
+        item.setData(ChatListWidget.ROLE_CLIPBOARD, text)
+        item.setData(ChatListWidget.ROLE_SORT, created_at)
         if icon is not None:
             item.setIcon(icon)
         self.list_widget.addItem(item)
@@ -172,7 +174,7 @@ class ChatComponent(QWidget):
         The creation datetime is stored in the associated item.
         """
         item = SortedListWidgetItem()
-        item.setData(self.ROLE_SORT, created_at)
+        item.setData(ChatListWidget.ROLE_SORT, created_at)
         item.setSizeHint(widget.sizeHint())
         self.list_widget.addItem(item)
         self.list_widget.setItemWidget(item, widget)
@@ -187,7 +189,7 @@ class ChatComponent(QWidget):
         text = text if text else os.path.basename(file.path)
         icon = QIcon(icon_path) if icon_path else read_QIcon("clip.svg")
         item = self.addItem(text, created_at, icon)
-        item.setData(self.ROLE_DATA, file)
+        item.setData(ChatListWidget.ROLE_DATA, file)
 
         return item
 
@@ -231,7 +233,7 @@ if __name__ == "__main__":
 
     # Connect signals to demonstrate their usage.
     def on_item_clicked(item: QListWidgetItem) -> None:
-        created_at: datetime = item.data(ChatComponent.ROLE_SORT)
+        created_at: datetime = item.data(ChatListWidget.ROLE_SORT)
         print("Item clicked:", item.text(), "Created at:", created_at)
 
     chat_component.itemClicked.connect(on_item_clicked)

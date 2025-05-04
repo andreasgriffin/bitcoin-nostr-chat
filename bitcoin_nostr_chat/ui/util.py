@@ -105,3 +105,28 @@ def get_input_text(placeholder_text: str, title: str, textcolor: QColor) -> str:
 
     # Return the text that the user entered
     return line_edit.text()
+
+
+def insert_invisible_spaces_for_wordwrap(s: str, max_word_length: int = 20) -> str:
+    """
+    Insert zero-width spaces (\u200B) into any word in `s` that exceeds max_word_length,
+    so that it can be wrapped by browsers or text renderers.
+
+    :param s: Input string.
+    :param max_word_length: Maximum allowed length of a continuous word before inserting \u200B.
+    :return: Modified string with \u200B inserted into long words.
+    """
+    words = s.split(" ")
+    processed = []
+
+    for word in words:
+        if len(word) <= max_word_length:
+            # Short enough, leave as-is
+            processed.append(word)
+        else:
+            # Break the word into chunks of max_word_length
+            parts = [word[i : i + max_word_length] for i in range(0, len(word), max_word_length)]
+            # Rejoin with zero-width spaces between chunks
+            processed.append("\u200B".join(parts))
+
+    return " ".join(processed)

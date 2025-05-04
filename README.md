@@ -30,10 +30,21 @@ All nostr messages have have optional [compression](https://github.com/andreasgr
 All exchanged [messages](https://github.com/andreasgriffin/bitcoin-nostr-chat/blob/5e166054d6a38f3becab0b84d6a8b01c0fcb0fb1/bitcoin_nostr_chat/base_dm.py#L50) need to have at least `"created_at"` key with a unix timestamp (float), to ensure correct ordering of chat messages
 
 ```python
-d = {"created_at": 1746003358}
-cbor_serialized = cbor2.dumps(d)	# b'\xa1jcreated_at\x1ah\x11\xe5\x9e'
-compressed_data = zlib.compress(cbor_serialized)	# b'x\x9c[\x98\x95\\\x94\x9aX\x92\x9a\x12\x9fX"\x95!\xf8t\x1e\x00@\x9e\x07.'
-message_content = base64.b85encode(compressed_data).decode()	# 'c${09m0XmXSdy9&pI9Q5A^3D206?AxE&'
+import cbor2, zlib, base64
+
+def compress(d:dict) -> str:
+    cbor_serialized = cbor2.dumps(d)	# b'\xa1jcreated_at\x1ah\x11\xe5\x9e'
+    compressed_data = zlib.compress(cbor_serialized)	# b'x\x9c[\x98\x95\\\x94\x9aX\x92\x9a\x12\x9fX"\x95!\xf8t\x1e\x00@\x9e\x07.'
+    return base64.b85encode(compressed_data).decode()
+message_content = compress({"created_at": 1746003358})	# 'c${09m0XmXSdy9&pI9Q5A^3D206?AxE&'
+```
+
+```python
+def decompress(s:str) -> dict:
+    decoded_data = base64.b85decode(base85_encoded_data)
+    decompressed_data = zlib.decompress(decoded_data)
+    return cbor2.loads(decompressed_data)
+decompress('c${09m0XmXSdy9&pI9Q5A^3D206?AxE&')	# {"created_at": 1746003358}
 ```
 
 #### No Compression
@@ -72,7 +83,7 @@ nsecshared = nostr_sdk.SecretKey.parse(hashed_twice)	# 'nsec1rc6jdcnk2n97x2ysk9c
 - `xpubs` is a list of xpubs occurring in the descriptor
 - `default_key_origin` is the key origin that is standard for the [address type](https://github.com/andreasgriffin/bitcoin-usb/blob/59d4ee5987e48657ae5903f5bbfe982a0be8bfa8/bitcoin_usb/address_types.py#L107) of the wallet.  Example: [p2sh-p2wsh](https://bips.dev/48/): `default_key_origin = "m/48h/0h/0h/1h"`
 
-#### `nsecparticipant` announcement
+#### `npubparticipant` announcement
 
 Announcement [messages](https://github.com/andreasgriffin/bitcoin-nostr-chat/blob/5e166054d6a38f3becab0b84d6a8b01c0fcb0fb1/bitcoin_nostr_chat/annoucement_dm.py#L42) are sent as Nip17 messages to `npubshared` with author `nsecshared` (author and receiver are identical).
 
@@ -84,7 +95,7 @@ Content (before optional compression):
 
 Optional fields are:
 
-- `"please_trust_public_key_bech32": npubother` :  Is  request that `npubother` should check if he trusts `npubparticipant`
+- `"please_trust_public_key_bech32": npubother` :  Is  request that `npubother` should check if he trusts `npubparticipant`. Recommended use: `npubparticipant` just marked  `npubother` as trusted and sends `"please_trust_public_key_bech32": npubother`.  `npubother`  can now get a visual notification that  `npubparticipant` requests his trust.   One way to visualize this request is to highlight `npubparticipant`  temporarily. 
 
 ## Chat Messages
 
@@ -156,5 +167,198 @@ Message content:
 
 
 
+##  JS examples
+
+The **python** code snippets above are the reference implementation.  The code snippets below are just to ease testing for developers
+
+#### Compression and Decompression
+
+``` javascript
+const cbor = require('cbor');
+const pako = require('pako');
+
+// Python’s base85 alphabet for b85encode:
+const BASE85 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@^_`{|}~';
+
+const BASE85_DECODE = Object.fromEntries(
+  BASE85.split('').map((ch, i) => [ch, i])
+);
+
+function base85Decode(str) {
+  const len = str.length;
+  const rem = len % 5;
+  if (rem === 1) {
+    throw new Error(`Invalid Base85 string length: mod 5 = ${rem}`);
+  }
+  // how many pad-chars we need to add to make a full 5-char block
+  const padChars = rem ? 5 - rem : 0;
+  // this is also the number of bytes the encoder originally padded (and then dropped)
+  const padBytes = padChars;
+
+  // pad the final, short group with the highest symbol ('~', value = 84)
+  const padChar = BASE85[84];
+  const full = padChars
+    ? str + padChar.repeat(padChars)
+    : str;
+
+  const out = [];
+  for (let i = 0; i < full.length; i += 5) {
+    let acc = 0;
+    for (let j = 0; j < 5; j++) {
+      const ch = full[i + j];
+      const val = BASE85_DECODE[ch];
+      if (val === undefined) {
+        throw new Error(`Invalid character '${ch}' at position ${i + j}`);
+      }
+      acc = acc * 85 + val;
+    }
+    // unpack into four bytes (big-endian)
+    out.push((acc >>> 24) & 0xFF);
+    out.push((acc >>> 16) & 0xFF);
+    out.push((acc >>>  8) & 0xFF);
+    out.push( acc         & 0xFF);
+  }
+
+  // drop the same number of padding _bytes_ that were added during encoding
+  return Buffer.from(out.slice(0, out.length - padBytes));
+}
+
+
+
+
+
+function base85Encode(buf) {
+  // pad to 4-byte boundary
+  const pad = (4 - (buf.length % 4)) % 4;
+  const data = pad ? Buffer.concat([buf, Buffer.alloc(pad)], buf.length + pad) : buf;
+
+  let out = '';
+  for (let i = 0; i < data.length; i += 4) {
+    // read 4 bytes as a big-endian uint32
+    let acc = data.readUInt32BE(i);
+    let chunk = '';
+    // turn into 5 base-85 chars
+    for (let j = 0; j < 5; j++) {
+      chunk = BASE85[acc % 85] + chunk;
+      acc = Math.floor(acc / 85);
+    }
+    out += chunk;
+  }
+  // drop padding characters
+  return pad ? out.slice(0, out.length - pad) : out;
+}
+
+
+
+///////////////////////////////////////
+console.log('Compression');
+///////////////////////////////////////
+
+
+function compress(data ){
+  try {
+    const cborData = cbor.encode(data)
+    //const cborData = cborSerialize(data)
+    jsonUint8 = new Uint8Array(cborData)
+
+    // it works if we skip the cborSerialization but outputs a different string
+    //const jsonString = JSON.stringify(data)
+    //jsonUint8 = new TextEncoder().encode(jsonString)
+
+    const compressedData = pako.deflate(jsonUint8)
+    const compressedBuffer = Buffer.from(compressedData)
+    console.log("compressedBuffer: ", compressedBuffer);
+
+    return base85Encode(compressedBuffer)
+  } catch (error) {
+    console.error('Compression error:', error)
+    throw new Error('Failed to compress data')
+  }
+}
+
+
+const d = { created_at: 1746003358 };
+compressed_string = compress(d);
+console.log(compressed_string);
+
+
+
+///////////////////////////////////////
+console.log('Decompression');
+///////////////////////////////////////
+
+function decompress(compressedString) {
+  try {
+    // 1) Base85 → Uint8Array
+    const compressedBytes = base85Decode(compressedString);
+    console.log("compressedBuffer: ", compressedBytes);
+
+    // 2) Inflate → Uint8Array of cbor bytes
+    const cborBytes = pako.inflate(compressedBytes);
+    console.log(cborBytes);
+
+    // 3) Decode cbor → original object
+    return cbor.decode(Buffer.from(cborBytes));
+  } catch (err) {
+    console.error('Decompression error:', err);
+    process.exit(1);
+  }
+}
+
+// Example usage:
+decompressed_str = decompress(compressed_string);
+console.log('Decompressed:', decompressed_str);
+
+```
+
+
+
+
+
 Please contact me if you have any questions.
+
+
+
+# Nostr subscription and message handling
+
+## Group chat
+
+It is crucial to separate **announcements**  from **group chat**.  Bitcoin Safe does it the following way:
+
+- I announce my public key by sending the "`npubparticipant` announcement" message to `npubshared`
+- **Subscription1** listens to messages sent to `npubshared` 
+  - I announce my `npubparticipant`
+  - If I receive a message that announces `npubother` one can add it to an `untrusted` list
+
+* The application now presents the option to the user to trust  `npubother`
+  * Once trusted, `npubother` is removed from the `untrusted` list and added to the `member` list. The `member` list is a locally stored list and not shared with anyone. The user has the option to remove a member at any time.
+* **Subscription2** listens to all messages sent to `npubparticipant`
+  * If the author (in NIP17 one needs to unwrap first) is in the `member` list, the message is accepted, otherwise the message is ignored
+
+
+
+# Protocol Use cases
+
+## Participant discovery
+
+- One can not only derive the shared secret from a descriptor, but from all kinds of commonly known private information. The user has to manually trust the other device
+
+## Chat messages
+
+* **Label backup** can be realized with sending messages to yourself, and using the relay as a cloud backup (unreliable)
+  * A -> A
+* **Group chat** can be realized with sending messages to all other participants
+  * A -> B,C,D,...
+
+* **Label synchronization** is  just a special form of group chat message
+  * After a new participant E is added, all labels are sent  A->E  (all labels)
+  * After each label change, only this label  change is sent A->E  (saves bandwidth)
+* **Collaborative signing** of a multisig PSBT. 
+  * Distributes participants (or devices) can sign a PSBT one after another until all signatures are collected
+
+* **Simple Chat** with only 2 participants is a special case of a group chat 
+
+
+
+
 
