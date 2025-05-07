@@ -13,12 +13,13 @@ from PyQt6.QtWidgets import (
     QListWidgetItem,
     QMenu,
     QPushButton,
-    QStyle,
     QVBoxLayout,
     QWidget,
 )
 
 from bitcoin_nostr_chat.ui.util import chat_color, get_input_text, short_key
+
+from .util import svg_tools
 
 logger = logging.getLogger(__name__)
 
@@ -87,9 +88,7 @@ class TrustedDeviceItem(BaseDeviceItem):
 
         # Close button (top-right)
         self.close_button = QPushButton()
-        self.close_button.setIcon(
-            (self.style() or QStyle()).standardIcon(QStyle.StandardPixmap.SP_TabCloseButton)
-        )
+        self.close_button.setIcon(svg_tools.get_QIcon("close.svg"))
         self.close_button.setFixedSize(24, 24)  # Set button size
         self.close_button.setFlat(True)  # Optional: make the button flat
         top_layout.addWidget(self.close_button)
