@@ -48,7 +48,8 @@ from PyQt6.QtWidgets import (
 from bitcoin_nostr_chat.dialogs import file_to_str
 from bitcoin_nostr_chat.signals_min import SignalsMin
 from bitcoin_nostr_chat.ui.chat_component import ChatComponent, FileObject
-from bitcoin_nostr_chat.ui.util import read_QIcon
+
+from .util import svg_tools
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +73,7 @@ class ChatGui(QWidget):
         self.shareButton = QPushButton()
         self.textChanged("")
         os.path.dirname(os.path.abspath(__file__))
-        self.shareButton.setIcon(read_QIcon("clip.svg"))
+        self.shareButton.setIcon(svg_tools.get_QIcon("bi--upload.svg"))
         self.shareButton.clicked.connect(self.on_share_button_click)
 
         # Placeholder for the dynamic layout

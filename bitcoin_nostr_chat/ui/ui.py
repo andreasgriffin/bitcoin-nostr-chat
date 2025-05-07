@@ -49,11 +49,12 @@ from PyQt6.QtWidgets import (
 )
 
 from bitcoin_nostr_chat.ui.device_manager import DeviceManager
-from bitcoin_nostr_chat.ui.util import chat_color, read_QIcon, short_key
+from bitcoin_nostr_chat.ui.util import chat_color, short_key
 
 from ..group_chat import RelayList
 from ..html import html_f
 from ..signals_min import SignalsMin
+from .util import svg_tools
 
 logger = logging.getLogger(__name__)
 
@@ -140,12 +141,16 @@ class UI(QtWidgets.QWidget):
         header_layout.addWidget(self.title_label)
 
         toolbar_button = QToolButton()
-        toolbar_button.setIcon(read_QIcon("preferences.png"))
+        toolbar_button.setIcon(svg_tools.get_QIcon("bi--gear.svg"))
         header_layout.addWidget(toolbar_button)
 
         self.menu = QMenu(self)
         self.action_export_identity = self.menu.addAction("", self.export_sync_key)
+        if self.action_export_identity:
+            self.action_export_identity.setIcon(svg_tools.get_QIcon("bi--download.svg"))
         self.action_set_keys = self.menu.addAction("", self.signal_set_keys.emit)
+        if self.action_set_keys:
+            self.action_set_keys.setIcon(svg_tools.get_QIcon("bi--upload.svg"))
         self.action_reset_identity = self.menu.addAction("", self.signal_reset_keys.emit)
         self.action_set_relays = self.menu.addAction("", self.ask_for_nostr_relays)
         toolbar_button.setMenu(self.menu)
