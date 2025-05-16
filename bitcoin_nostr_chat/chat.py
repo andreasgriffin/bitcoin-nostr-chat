@@ -37,7 +37,6 @@ from nostr_sdk import PublicKey
 from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox
 
-from bitcoin_nostr_chat import DEFAULT_USE_COMPRESSION
 from bitcoin_nostr_chat.chat_dm import ChatLabel
 from bitcoin_nostr_chat.dialogs import create_custom_message_box
 from bitcoin_nostr_chat.group_chat import GroupChat
@@ -62,12 +61,10 @@ class BaseChat(QObject):
         network: bdk.Network,
         group_chat: GroupChat,
         signals_min: SignalsMin,
-        use_compression=DEFAULT_USE_COMPRESSION,
     ) -> None:
         super().__init__()
         self.signals_min = signals_min
         self.group_chat = group_chat
-        self.use_compression = use_compression
         self.network = network
 
         self.gui = BitcoinDmChatGui(signals_min=self.signals_min)
@@ -91,7 +88,7 @@ class BaseChat(QObject):
             description=file_name,
             event=None,
             data=bitcoin_data,
-            use_compression=self.use_compression,
+            use_compression=self.group_chat.use_compression,
             created_at=datetime.now(),
         )
         return dm
@@ -113,12 +110,11 @@ class Chat(BaseChat):
         group_chat: GroupChat,
         signals_min: SignalsMin,
         restrict_to_counterparties: List[PublicKey] | None = None,
-        use_compression=DEFAULT_USE_COMPRESSION,
         display_labels=[ChatLabel.GroupChat, ChatLabel.SingleRecipient],
         display_file_types=[DataType.PSBT, DataType.Tx],
         send_label=ChatLabel.GroupChat,
     ) -> None:
-        super().__init__(network, group_chat, signals_min, use_compression)
+        super().__init__(network=network, group_chat=group_chat, signals_min=signals_min)
         self.display_labels = display_labels
         self.send_label = send_label
         self.restrict_to_counterparties = restrict_to_counterparties
@@ -166,7 +162,7 @@ class Chat(BaseChat):
             label=self.send_label,
             description=text,
             event=None,
-            use_compression=self.use_compression,
+            use_compression=self.group_chat.use_compression,
             created_at=datetime.now(),
         )
         self._send(dm)
