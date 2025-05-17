@@ -97,7 +97,6 @@ class BaseNostrSync(QObject):
         signals_min: SignalsMin,
         individual_chats_visible=True,
         hide_data_types_in_chat: tuple[DataType] = (DataType.LabelsBip329,),
-        use_compression=DEFAULT_USE_COMPRESSION,
         debug=False,
         parent: QObject | None = None,
     ) -> None:
@@ -108,7 +107,6 @@ class BaseNostrSync(QObject):
         self.group_chat = group_chat
         self.hide_data_types_in_chat = hide_data_types_in_chat
         self.signals_min = signals_min
-        self.use_compression = use_compression
 
         self.ui = UI(
             my_keys=self.group_chat.dm_connection.async_dm_connection.keys,
@@ -186,22 +184,18 @@ class BaseNostrSync(QObject):
         device_keys: Keys,
         signals_min: SignalsMin,
         individual_chats_visible=True,
-        use_compression=DEFAULT_USE_COMPRESSION,
         parent: QObject | None = None,
+        use_compression=DEFAULT_USE_COMPRESSION,
     ):
         nostr_protocol = NostrProtocol(
             network=network,
             keys=protocol_keys,
-            use_compression=use_compression,
             sync_start=None,
             parent=parent,
+            use_compression=use_compression,
         )
         group_chat = GroupChat(
-            network=network,
-            keys=device_keys,
-            use_compression=use_compression,
-            sync_start=None,
-            parent=parent,
+            network=network, keys=device_keys, sync_start=None, parent=parent, use_compression=use_compression
         )
         return cls(
             network=network,
@@ -209,7 +203,6 @@ class BaseNostrSync(QObject):
             group_chat=group_chat,
             individual_chats_visible=individual_chats_visible,
             signals_min=signals_min,
-            use_compression=use_compression,
             parent=parent,
         )
 
@@ -307,7 +300,7 @@ class BaseNostrSync(QObject):
             description=file_name,
             event=None,
             data=bitcoin_data,
-            use_compression=self.use_compression,
+            use_compression=self.group_chat.use_compression,
             created_at=datetime.now(),
         )
         return dm
@@ -389,20 +382,18 @@ class NostrSync(BaseNostrSync):
         signals_min: SignalsMin,
         individual_chats_visible=True,
         hide_data_types_in_chat: tuple[DataType] = (DataType.LabelsBip329,),
-        use_compression=DEFAULT_USE_COMPRESSION,
         debug=False,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(
-            network,
-            nostr_protocol,
-            group_chat,
-            signals_min,
-            individual_chats_visible,
-            hide_data_types_in_chat,
-            use_compression,
-            debug,
-            parent,
+            network=network,
+            nostr_protocol=nostr_protocol,
+            group_chat=group_chat,
+            signals_min=signals_min,
+            individual_chats_visible=individual_chats_visible,
+            hide_data_types_in_chat=hide_data_types_in_chat,
+            debug=debug,
+            parent=parent,
         )
 
         self.label_connector = LabelConnector(
@@ -413,7 +404,6 @@ class NostrSync(BaseNostrSync):
             network=network,
             group_chat=self.group_chat,
             signals_min=signals_min,
-            use_compression=use_compression,
             display_labels=[ChatLabel.GroupChat, ChatLabel.SingleRecipient],
             send_label=ChatLabel.GroupChat,
         )
@@ -431,20 +421,18 @@ class NostrSyncWithSingleChats(BaseNostrSync):
         signals_min: SignalsMin,
         individual_chats_visible=True,
         hide_data_types_in_chat: tuple[DataType] = (DataType.LabelsBip329,),
-        use_compression=DEFAULT_USE_COMPRESSION,
         debug=False,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(
-            network,
-            nostr_protocol,
-            group_chat,
-            signals_min,
-            individual_chats_visible,
-            hide_data_types_in_chat,
-            use_compression,
-            debug,
-            parent,
+            network=network,
+            nostr_protocol=nostr_protocol,
+            group_chat=group_chat,
+            signals_min=signals_min,
+            individual_chats_visible=individual_chats_visible,
+            hide_data_types_in_chat=hide_data_types_in_chat,
+            debug=debug,
+            parent=parent,
         )
 
         self.label_connector = LabelConnector(
@@ -455,7 +443,6 @@ class NostrSyncWithSingleChats(BaseNostrSync):
             network=network,
             group_chat=self.group_chat,
             signals_min=signals_min,
-            use_compression=use_compression,
             display_labels=[ChatLabel.GroupChat],
             send_label=ChatLabel.GroupChat,
         )
@@ -472,7 +459,6 @@ class NostrSyncWithSingleChats(BaseNostrSync):
             network=self.network,
             group_chat=self.group_chat,
             signals_min=self.signals_min,
-            use_compression=self.use_compression,
             restrict_to_counterparties=[PublicKey.parse(pub_key_bech32)],
             display_labels=[ChatLabel.SingleRecipient],
             send_label=ChatLabel.SingleRecipient,

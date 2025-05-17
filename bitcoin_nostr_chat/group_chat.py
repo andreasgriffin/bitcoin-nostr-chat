@@ -256,6 +256,7 @@ class GroupChat(BaseProtocol):
             f"Successfully sent to {receiver.to_bech32()=} ({send_to_other_event_id=}) and now send copy to myself"
         )
         copy_dm = ChatDM.from_dump(dm.dump(), network=self.network)
+        copy_dm.use_compression = dm.use_compression
         copy_dm.event = None
         self.dm_connection.send(copy_dm, receiver=self.my_public_key())
 
