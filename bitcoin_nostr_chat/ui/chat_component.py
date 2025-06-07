@@ -33,7 +33,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 
 from bitcoin_qr_tools.data import Data
-from bitcoin_tools.util import insert_invisible_spaces_for_wordwrap
+from bitcoin_safe_lib.util import insert_invisible_spaces_for_wordwrap
 from PyQt6.QtCore import QPoint, Qt, pyqtSignal
 from PyQt6.QtGui import QIcon, QKeyEvent
 from PyQt6.QtWidgets import (

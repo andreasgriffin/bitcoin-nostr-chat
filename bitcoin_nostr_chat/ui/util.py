@@ -1,6 +1,6 @@
-from bitcoin_tools.gui.qt.icons import SvgTools
-from bitcoin_tools.gui.qt.util import is_dark_mode
-from bitcoin_tools.util import hash_string
+from bitcoin_safe_lib.gui.qt.icons import SvgTools
+from bitcoin_safe_lib.gui.qt.util import is_dark_mode
+from bitcoin_safe_lib.util import hash_string
 from PyQt6.QtGui import QColor, QKeySequence, QShortcut
 from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QLineEdit, QVBoxLayout
 
