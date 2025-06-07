@@ -11,7 +11,7 @@ disable_error_code = "assignment"
 
 [tool.poetry]
 name = "bitcoin-nostr-chat"
-version = "1.0.1"
+version = "1.0.2"
 authors = ["andreasgriffin <andreasgriffin@proton.me>"]
 license = "GPL-3.0"
 readme = "README.md"
@@ -19,13 +19,13 @@ description = "A Nostr Chat with participant discovery"
 homepage = "https://github.com/andreasgriffin/bitcoin-nostr-chat"
 
 [tool.poetry.dependencies]
-python = ">=3.9,<3.13"
+python = ">=3.10,<3.13"
 cbor2 = "^5.6.3"
 requests = "^2.31.0"
 pyqt6 = "^6.6.1" 
 nostr-sdk = "^0.38.0"
 bitcoin-qr-tools = {  git = "https://github.com/andreasgriffin/bitcoin-qr-tools.git", rev = "24e4392f0a2e4eb3c4cbf61a4e5b44eeac17fcf4" }  #  "^0.3.3"
-bitcoin-tools = {  git = "https://github.com/andreasgriffin/bitcoin-tools.git", rev = "c69522186e0408c973e972c5002df6f06684a918" }   
+bitcoin-safe-lib = "^0.1.0"
 
 
 
