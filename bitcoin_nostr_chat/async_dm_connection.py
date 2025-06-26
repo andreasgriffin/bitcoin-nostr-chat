@@ -109,6 +109,9 @@ class AsyncDmConnection(QObject):
             from_serialized=self.from_serialized,
         )
 
+    def close(self):
+        self.notification_handler.close()
+
     async def disconnect_client(self, client: Client):
         # if self.task_handle_notifications:
         #     try:

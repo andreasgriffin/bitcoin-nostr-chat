@@ -90,7 +90,7 @@ class DemoApp(QMainWindow):
 
     def closeEvent(self, event: Optional[QCloseEvent]) -> None:
         save_dict_to_file(self.nostr_sync.dump(), self.file_name)
-        self.nostr_sync.stop()
+        self.nostr_sync.close()
         super().closeEvent(event)
 
 

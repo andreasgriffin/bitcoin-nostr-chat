@@ -78,7 +78,7 @@ def send_dms_to_self(qtbot: QtBot, relays: List[str], raise_error: bool):
 
             QCoreApplication.processEvents()  # Allow Qt to process events
             # sender.stop()
-            dm_connection.stop()
+            dm_connection.close()
             test_instance_recipient.signal_dm.disconnect(add_to_chat)
             QCoreApplication.processEvents()  # Allow Qt to process events
 

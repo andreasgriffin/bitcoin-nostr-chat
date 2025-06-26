@@ -33,6 +33,7 @@ from typing import List
 
 import bdkpython as bdk
 from bitcoin_qr_tools.data import Data, DataType
+from bitcoin_safe_lib.gui.qt.signal_tracker import SignalTracker
 from nostr_sdk import PublicKey
 from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox
@@ -66,13 +67,18 @@ class BaseChat(QObject):
         self.signals_min = signals_min
         self.group_chat = group_chat
         self.network = network
+        self.signal_tracker = SignalTracker()
 
         self.gui = BitcoinDmChatGui(signals_min=self.signals_min)
 
         # connect signals
-        self.gui.chat_component.signal_attachement_clicked.connect(self.signal_attachement_clicked)
-        self.signal_attachement_clicked.connect(self.on_signal_attachement_clicked)
-        self.gui.chat_component.list_widget.signal_clear.connect(self.clear_chat_from_memory)
+        self.signal_tracker.connect(
+            self.gui.chat_component.signal_attachement_clicked, self.signal_attachement_clicked.emit
+        )
+        self.signal_tracker.connect(self.signal_attachement_clicked, self.on_signal_attachement_clicked)
+        self.signal_tracker.connect(
+            self.gui.chat_component.list_widget.signal_clear, self.clear_chat_from_memory
+        )
 
     def is_me(self, public_key: PublicKey) -> bool:
         return public_key.to_bech32() == self.group_chat.my_public_key().to_bech32()
@@ -102,6 +108,9 @@ class BaseChat(QObject):
             if dm in processed_dms:
                 processed_dms.remove(dm)
 
+    def close(self):
+        self.signal_tracker.disconnect_all()
+
 
 class Chat(BaseChat):
     def __init__(
@@ -121,9 +130,9 @@ class Chat(BaseChat):
         self.display_file_types = display_file_types
 
         # signals
-        self.group_chat.signal_dm.connect(self.add_to_chat)
-        self.gui.signal_on_message_send.connect(self.on_send_message_in_groupchat)
-        self.gui.signal_share_filecontent.connect(self.on_share_file_in_groupchat)
+        self.signal_tracker.connect(self.group_chat.signal_dm, self.add_to_chat)
+        self.signal_tracker.connect(self.gui.signal_on_message_send, self.on_send_message_in_groupchat)
+        self.signal_tracker.connect(self.gui.signal_share_filecontent, self.on_share_file_in_groupchat)
 
     def add_to_chat(self, dm: ChatDM):
         if not dm.author:

@@ -33,6 +33,7 @@ from typing import Any, Dict, Optional
 
 import bdkpython as bdk
 from bitcoin_qr_tools.data import Data, DataType
+from bitcoin_safe_lib.gui.qt.signal_tracker import SignalTracker
 from nostr_sdk import Keys, PublicKey, SecretKey
 from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox
@@ -107,6 +108,7 @@ class BaseNostrSync(QObject):
         self.group_chat = group_chat
         self.hide_data_types_in_chat = hide_data_types_in_chat
         self.signals_min = signals_min
+        self.signal_tracker = SignalTracker()
 
         self.ui = UI(
             my_keys=self.group_chat.dm_connection.async_dm_connection.keys,
@@ -114,18 +116,20 @@ class BaseNostrSync(QObject):
             signals_min=signals_min,
             get_relay_list=self.group_chat.dm_connection.get_connected_relays,
         )
-        self.signal_set_alias.connect(self.ui.device_manager.on_set_alias)
+        self.signal_tracker.connect(self.signal_set_alias, self.ui.device_manager.on_set_alias)
 
-        self.nostr_protocol.signal_dm.connect(self.on_signal_protocol_dm)
-        self.group_chat.signal_dm.connect(self.on_dm)
+        self.signal_tracker.connect(self.nostr_protocol.signal_dm, self.on_signal_protocol_dm)
+        self.signal_tracker.connect(self.group_chat.signal_dm, self.on_dm)
 
-        self.ui.signal_set_relays.connect(self.on_set_relays)
-        self.ui.device_manager.untrusted.signal_trust_device.connect(self.on_gui_signal_trust_device)
-        self.ui.device_manager.trusted.signal_untrust_device.connect(self.untrust_device)
-        self.ui.signal_reset_keys.connect(self.reset_own_key)
-        self.ui.signal_set_keys.connect(self.set_own_key)
-        self.ui.signal_close_event.connect(self.stop)
-        self.ui.device_manager.signal_set_alias.connect(self.signal_set_alias)
+        self.signal_tracker.connect(self.ui.signal_set_relays, self.on_set_relays)
+        self.signal_tracker.connect(
+            self.ui.device_manager.untrusted.signal_trust_device, self.on_gui_signal_trust_device
+        )
+        self.signal_tracker.connect(self.ui.device_manager.trusted.signal_untrust_device, self.untrust_device)
+        self.signal_tracker.connect(self.ui.signal_reset_keys, self.reset_own_key)
+        self.signal_tracker.connect(self.ui.signal_set_keys, self.set_own_key)
+        self.signal_tracker.connect(self.ui.signal_close_event, self.close)
+        self.signal_tracker.connect(self.ui.device_manager.signal_set_alias, self.signal_set_alias.emit)
 
     def on_gui_signal_trust_device(self, pub_key_bech32: str):
         self.trust_device(pub_key_bech32=pub_key_bech32)
@@ -137,9 +141,10 @@ class BaseNostrSync(QObject):
             self.group_chat.dm_connection.async_dm_connection.notification_handler.replay_untrusted_events
         )
 
-    def stop(self):
-        self.group_chat.dm_connection.stop()
-        self.nostr_protocol.dm_connection.stop()
+    def close(self):
+        self.signal_tracker.disconnect_all()
+        self.group_chat.dm_connection.close()
+        self.nostr_protocol.dm_connection.close()
 
     def on_set_relays(self, relay_list: RelayList):
         logger.info(f"Setting relay_list {relay_list} ")
@@ -408,7 +413,12 @@ class NostrSync(BaseNostrSync):
             send_label=ChatLabel.GroupChat,
         )
         self.ui.tabs.addTab(self.chat.gui, self.tr("Group Chat"))
-        self.signal_set_alias.connect(self.chat.on_set_alias)
+        self.signal_tracker.connect(self.signal_set_alias, self.chat.on_set_alias)
+
+    def close(self):
+        super().close()
+        self.label_connector.close()
+        self.chat.close()
 
 
 class NostrSyncWithSingleChats(BaseNostrSync):
@@ -450,9 +460,9 @@ class NostrSyncWithSingleChats(BaseNostrSync):
 
         self.chats: Dict[str, Chat] = {}
 
-        self.signal_add_trusted_device.connect(self.add_chat_for_trusted_device)
-        self.signal_remove_trusted_device.connect(self.remove_chat_for_trusted_device)
-        self.signal_set_alias.connect(self.chat.on_set_alias)
+        self.signal_tracker.connect(self.signal_add_trusted_device, self.add_chat_for_trusted_device)
+        self.signal_tracker.connect(self.signal_remove_trusted_device, self.remove_chat_for_trusted_device)
+        self.signal_tracker.connect(self.signal_set_alias, self.chat.on_set_alias)
 
     def add_chat_for_trusted_device(self, pub_key_bech32: str):
         chat = Chat(

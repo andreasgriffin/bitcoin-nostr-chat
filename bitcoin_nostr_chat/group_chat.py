@@ -120,6 +120,9 @@ class BaseProtocol(QObject):
     def get_currently_allowed(self) -> Set[str]:
         pass
 
+    def close(self):
+        self.dm_connection.close()
+
 
 class NostrProtocol(BaseProtocol):
     signal_dm = pyqtSignal(AccouncementDM)
