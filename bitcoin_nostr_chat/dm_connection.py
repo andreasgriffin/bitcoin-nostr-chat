@@ -157,9 +157,10 @@ class DmConnection(QObject):
             self.async_dm_connection.disconnect_client(self.async_dm_connection.client_notification)
         )
 
-    def stop(self):
+    def close(self):
         self.disconnect_clients()
         self.async_thread.stop()
+        self.async_dm_connection.close()
 
     def queue_coroutine(self, coro, on_done: Callable[[], None] | None = None):
         self.async_thread.queue_coroutine(coro, on_done=on_done)

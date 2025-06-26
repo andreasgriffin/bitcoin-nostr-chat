@@ -26,12 +26,12 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-
 import logging
 from collections import deque
 from typing import Any, Callable, Iterable, Optional
 
 import requests
+from bitcoin_safe_lib.gui.qt.signal_tracker import SignalTracker
 from nostr_sdk import (
     Event,
     HandleNotification,
@@ -107,13 +107,14 @@ class NotificationHandler(HandleNotification):
         from_serialized: Callable[[str], BaseDM],
     ) -> None:
         super().__init__()
+        self.signal_tracker = SignalTracker()
         self.processed_dms: deque[BaseDM] = processed_dms
         self.untrusted_events: deque[Event] = deque(maxlen=10000)
         self.get_currently_allowed = get_currently_allowed
         self.my_keys = my_keys
         self.signal_dm = signal_dm
         self.from_serialized = from_serialized
-        signal_dm.connect(self.on_signal_dm)
+        self.signal_tracker.connect(signal_dm, self.on_signal_dm)
 
     def is_allowed_message(self, recipient_public_key: PublicKey, author: PublicKey) -> bool:
         logger.debug(f"{recipient_public_key.to_bech32()=}   ")
@@ -235,3 +236,6 @@ class NotificationHandler(HandleNotification):
 
     async def replay_untrusted_events(self):
         await self.replay_events([event for event in self.untrusted_events])
+
+    def close(self):
+        self.signal_tracker.disconnect_all()

@@ -30,6 +30,7 @@
 import logging
 
 from bitcoin_qr_tools.data import Data, DataType
+from bitcoin_safe_lib.gui.qt.signal_tracker import SignalTracker
 from nostr_sdk import PublicKey
 from PyQt6.QtCore import QObject, pyqtSignal
 
@@ -52,9 +53,10 @@ class LabelConnector(QObject):
         self.signals_min = signals_min
         self.group_chat = group_chat
         self.debug = debug
+        self.signal_tracker = SignalTracker()
 
         # connect signals
-        self.group_chat.signal_dm.connect(self.on_dm)
+        self.signal_tracker.connect(self.group_chat.signal_dm, self.on_dm)
 
     def on_dm(self, dm: ChatDM):
         if not dm.author:
@@ -64,3 +66,6 @@ class LabelConnector(QObject):
         if dm.data and dm.data.data_type == DataType.LabelsBip329:
             # only emit a signal if I didn't send it
             self.signal_label_bip329_received.emit(dm.data, dm.author)
+
+    def close(self):
+        self.signal_tracker.disconnect_all()
