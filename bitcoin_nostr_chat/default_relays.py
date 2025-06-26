@@ -6,7 +6,6 @@ def get_preferred_relays() -> List[str]:
         "wss://nostr.btc-library.com",
         "wss://nostrue.com",
         "wss://relay.primal.net",
-        "wss://nostr.schneimi.de",
         "wss://nostr.sathoarder.com",
         "wss://nostr.einundzwanzig.space",
         "wss://nostr.vulpem.com",
@@ -14,6 +13,7 @@ def get_preferred_relays() -> List[str]:
         "wss://relay.wavlake.com",
         "wss://strfry.openhoofd.nl",
         "wss://rocky.nostr1.com",
+        "wss://nostr.bitcoiner.social",
     ]
 
 
@@ -131,7 +131,6 @@ def get_default_delays() -> List[str]:
         "wss://nostr.girino.org",
         "wss://strfry.bonsai.com",
         "wss://support.nostr1.com",
-        "wss://nostr.schneimi.de",
         "wss://henhouse.social/relay",
         "wss://bostr.bitcointxoko.com",
         "wss://bostr.bitcointxoko.com",
