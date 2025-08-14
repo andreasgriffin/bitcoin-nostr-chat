@@ -39,7 +39,6 @@ repos:
  
 
 
-
   - repo: local
     hooks:
       - id: pyright
@@ -48,4 +47,3 @@ repos:
         language: system
         types: [python]
         pass_filenames: false
-

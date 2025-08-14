@@ -30,6 +30,8 @@
 import logging
 from collections.abc import Coroutine
 from typing import Any, TypeVar
+import threading
+from typing import Any, Awaitable, Coroutine, TypeVar
 
 from bitcoin_safe_lib.async_tools.loop_in_thread import LoopInThread, MultipleStrategy
 from PyQt6.QtCore import QObject, pyqtSignal

@@ -3,6 +3,7 @@ import hashlib
 import json
 import logging
 import sys
+from typing import Optional
 from uuid import uuid4
 
 import bdkpython as bdk
@@ -85,7 +86,7 @@ class DemoApp(QMainWindow):
         self.setCentralWidget(self.nostr_sync.ui)
         self.setWindowTitle("Demo App")
 
-    def closeEvent(self, a0: QCloseEvent | None) -> None:
+    def closeEvent(self, a0: Optional[QCloseEvent]) -> None:
         save_dict_to_file(self.nostr_sync.dump(), self.file_name)
         self.nostr_sync.close()
         super().closeEvent(a0)

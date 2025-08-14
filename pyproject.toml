@@ -23,8 +23,8 @@ python = ">=3.10,<3.13"
 cbor2 = "^5.6.3"
 requests = "^2.31.0"
 pyqt6 = "^6.6.1" 
-bitcoin-qr-tools = {  git = "https://github.com/andreasgriffin/bitcoin-qr-tools.git", branch = "main" }  #  "^0.3.3"
-bitcoin-safe-lib = "^0.2.0"
+bitcoin-qr-tools = {  git = "https://github.com/andreasgriffin/bitcoin-qr-tools.git",  branch = "bdk2.x" }  #  "^0.3.3"
+bitcoin-safe-lib = {  git = "https://github.com/andreasgriffin/bitcoin-safe-lib.git", branch = "bdk2.x" }  #  "^0.3.3"
 nostr-sdk = "^0.43.1"
 
 
