@@ -24,7 +24,7 @@ cbor2 = "^5.6.3"
 requests = "^2.31.0"
 pyqt6 = "^6.6.1" 
 nostr-sdk = "^0.38.0"
-bitcoin-qr-tools = {  git = "https://github.com/andreasgriffin/bitcoin-qr-tools.git", rev = "d3670ae544906eb7aa73345638988ded2eeb420d" }  #  "^0.3.3"
+bitcoin-qr-tools = {  git = "https://github.com/andreasgriffin/bitcoin-qr-tools.git", branch = "main" }  #  "^0.3.3"
 bitcoin-safe-lib = "^0.2.0"
 
 
