@@ -32,15 +32,15 @@ import logging
 import threading
 from typing import Awaitable, TypeVar
 
-from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtCore import QObject, pyqtSignal
 
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")  # Represents the type of the result returned by the coroutine
 
 
-class AsyncThread(QThread):
-    """A QThread running an asyncio event loop and processing tasks sequentially."""
+class AsyncThread(QObject):
+    """Manage an asyncio event loop on a dedicated Python thread."""
 
     result_ready = pyqtSignal(object, object, object)  #  result, coro_func, on_done
 
@@ -49,15 +49,16 @@ class AsyncThread(QThread):
         # Create a new event loop for this thread (do not set globally yet).
         self.loop = asyncio.new_event_loop()
         self.loop_started = threading.Event()
-        # We will create the queue *inside* run() after setting the event loop.
-        self.task_queue: asyncio.Queue = asyncio.Queue()
-        self.start()
+        self.task_queue: asyncio.Queue | None = None
+        self._thread = threading.Thread(target=self._run_loop, name="AsyncThreadLoop", daemon=True)
+        self._thread.start()
 
-    def run(self):
-        """Entry point for the QThread; set and run the asyncio event loop."""
+    def _run_loop(self):
+        """Entry point for the worker thread; set and run the asyncio event loop."""
         # Bind this event loop to the current thread.
         asyncio.set_event_loop(self.loop)
-        # Now it's safe to create the asyncio queue in this thread's loop context.
+        # Create the asyncio queue within the thread context.
+        self.task_queue = asyncio.Queue()
 
         # Signal that the event loop is ready.
         self.loop_started.set()
@@ -76,6 +77,8 @@ class AsyncThread(QThread):
         while True:
             await asyncio.sleep(0.01)
             logger.debug(f"{self.__class__.__name__}: Waiting for task...")
+            if self.task_queue is None:
+                raise RuntimeError("Event loop queue has not been initialised.")
             coro_func, on_done = await self.task_queue.get()
             logger.debug(f"Task received: {coro_func}")
             try:
@@ -95,15 +98,20 @@ class AsyncThread(QThread):
             task.cancel()
         self.loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
         self.loop.close()
+        self.task_queue = None
 
     def stop(self):
         """Stop the event loop (if needed) and wait for the thread to finish."""
+        if not self.loop_started.is_set():
+            self.loop_started.wait()
+
         if self.loop.is_running():
             # Schedule loop.stop() to run from within the event loop
             self.loop.call_soon_threadsafe(self.loop.stop)
 
-            # Wait for run() to return and the thread to exit
-            self.wait()
+        if self._thread.is_alive():
+            # Wait for the worker thread to exit
+            self._thread.join()
 
     def queue_coroutine(self, coro_func: Awaitable, on_done=None):
         """
@@ -118,6 +126,8 @@ class AsyncThread(QThread):
 
         def put_item():
             logger.debug(f"Add to queue {coro_func}")
+            if self.task_queue is None:
+                raise RuntimeError("Event loop queue has not been initialised.")
             self.task_queue.put_nowait((coro_func, on_done))
 
         # Schedule the queue put in a thread-safe manner.
@@ -167,6 +177,8 @@ class AsyncThread(QThread):
         """
 
         # Use run_coroutine_threadsafe to submit the coroutine to the running loop
+        if not self.loop_started.is_set():
+            self.loop_started.wait()
         future = asyncio.run_coroutine_threadsafe(coro, self.loop)
 
         # Wait for the coroutine to complete and return its result

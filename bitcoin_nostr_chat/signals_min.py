@@ -29,12 +29,10 @@
 
 import logging
 
-from PyQt6.QtCore import QObject, QThread, pyqtSignal
+from PyQt6.QtCore import QObject, pyqtSignal
 
 logger = logging.getLogger(__name__)
 
 
 class SignalsMin(QObject):
     language_switch = pyqtSignal()
-    signal_add_threat = pyqtSignal(QThread)
-    signal_stop_threat = pyqtSignal(QThread)
