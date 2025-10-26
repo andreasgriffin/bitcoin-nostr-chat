@@ -32,11 +32,11 @@ import json
 import logging
 import zlib
 from datetime import datetime, timedelta
-from typing import Dict, Optional
 
 import bdkpython as bdk
 import cbor2
 from nostr_sdk import Event, PublicKey
+from typing_extensions import Self
 
 from bitcoin_nostr_chat import DEFAULT_USE_COMPRESSION
 from bitcoin_nostr_chat.utils import filtered_for_init
@@ -48,8 +48,8 @@ class BaseDM:
     def __init__(
         self,
         created_at: datetime,
-        event: Optional[Event] = None,
-        author: Optional[PublicKey] = None,
+        event: Event | None = None,
+        author: PublicKey | None = None,
         use_compression=DEFAULT_USE_COMPRESSION,
     ) -> None:
         super().__init__()
@@ -59,13 +59,13 @@ class BaseDM:
         self.use_compression = use_compression
 
     @staticmethod
-    def delete_none_entries(d: Dict) -> Dict:
+    def delete_none_entries(d: dict) -> dict:
         for key, value in list(d.items()):
             if value is None:
                 del d[key]
         return d
 
-    def dump(self) -> Dict:
+    def dump(self) -> dict:
         d = {}
         d["event"] = self.event.as_json() if self.event else None
         d["author"] = self.author.to_bech32() if self.author else None
@@ -82,36 +82,34 @@ class BaseDM:
             cbor_serialized = cbor2.dumps(d)
             compressed_data = zlib.compress(cbor_serialized)
             base85_encoded_data = base64.b85encode(compressed_data).decode()
-            logger.debug(f"{100*(1-len(compressed_data)/(1+len(cbor_serialized))):.1f}% compression")
+            logger.debug(f"{100 * (1 - len(compressed_data) / (1 + len(cbor_serialized))):.1f}% compression")
             return base85_encoded_data
         else:
             return json.dumps(d)
 
     @classmethod
-    def from_dump(cls, decoded_dict: Dict, network: bdk.Network):
+    def from_dump(cls, d: dict, network: bdk.Network) -> Self:
         # decode the data from the string and ensure the type is
-        event = Event.from_json(decoded_dict["event"]) if decoded_dict.get("event") else None
-        decoded_dict["event"] = event
-        decoded_dict["author"] = (
-            PublicKey.parse(decoded_dict["author"]) if decoded_dict.get("author") else None
-        )
+        event = Event.from_json(d["event"]) if d.get("event") else None
+        d["event"] = event
+        d["author"] = PublicKey.parse(d["author"]) if d.get("author") else None
         try:
             # in the old format created_at was optional. So i have to catch this.
-            decoded_dict["created_at"] = datetime.fromtimestamp(decoded_dict["created_at"])
-        except:
-            decoded_dict["created_at"] = datetime.now() - timedelta(
+            d["created_at"] = datetime.fromtimestamp(d["created_at"])
+        except Exception:
+            d["created_at"] = datetime.now() - timedelta(
                 days=30
             )  # assume the legacy format is at least 30 days old
 
-        logger.info(f"decoded_dict  with id={event.id().to_bech32() if event  else None}")
-        return cls(**filtered_for_init(decoded_dict, cls))
+        logger.info(f"decoded_dict  with id={event.id().to_bech32() if event else None}")
+        return cls(**filtered_for_init(d, cls))
 
     @classmethod
     def from_serialized(cls, base85_encoded_data: str, network: bdk.Network):
         if base85_encoded_data.startswith("{"):
             # if it is likely a json string, try this method first
             try:
-                logger.debug(f"from_serialized json")
+                logger.debug("from_serialized json")
                 decoded_dict = json.loads(base85_encoded_data)
                 return cls.from_dump(decoded_dict, network=network)
             except Exception:
@@ -119,13 +117,13 @@ class BaseDM:
 
         try:
             # try first the compressed decoding
-            logger.debug(f"from_serialized compressed")
+            logger.debug("from_serialized compressed")
             decoded_data = base64.b85decode(base85_encoded_data)
             decompressed_data = zlib.decompress(decoded_data)
             decoded_dict = cbor2.loads(decompressed_data)
             return cls.from_dump(decoded_dict, network=network)
         except Exception:
-            logger.error(f"from_serialized failed")
+            logger.error("from_serialized failed")
             raise
 
     def __str__(self) -> str:

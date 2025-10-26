@@ -30,7 +30,6 @@
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
 
 from bitcoin_nostr_chat.default_relays import get_default_delays, get_preferred_relays
 from bitcoin_nostr_chat.utils import filtered_for_init
@@ -40,9 +39,9 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class RelayList:
-    relays: List[str]
+    relays: list[str]
     last_updated: datetime
-    max_age: Optional[int] = 30  # days,  "None" means it is disabled
+    max_age: int | None = 30  # days,  "None" means it is disabled
 
     @classmethod
     def from_internet(cls) -> "RelayList":
@@ -55,16 +54,16 @@ class RelayList:
         relays = [line for line in relays if line]
         return RelayList(relays=relays, last_updated=datetime.now(), max_age=max_age)
 
-    def get_subset(self, size: int) -> List[str]:
+    def get_subset(self, size: int) -> list[str]:
         return self.relays[: min(len(self.relays), size)]
 
-    def dump(self) -> Dict:
+    def dump(self) -> dict:
         d = self.__dict__.copy()
         d["last_updated"] = self.last_updated.timestamp()
         return d
 
     @classmethod
-    def from_dump(cls, d: Dict) -> "RelayList":
+    def from_dump(cls, d: dict) -> "RelayList":
         d["last_updated"] = datetime.fromtimestamp(d["last_updated"])
         return cls(**filtered_for_init(d, cls))
 
@@ -79,11 +78,11 @@ class RelayList:
 
     def update_if_stale(self):
         if self.is_stale():
-            logger.debug(f"Update relay list, because stale.")
+            logger.debug("Update relay list, because stale.")
             self.update_relays()
 
     @classmethod
-    def _postprocess_relays(cls, relays) -> List[str]:
+    def _postprocess_relays(cls, relays) -> list[str]:
         preferred_relays = get_preferred_relays()
         return preferred_relays + [r for r in relays if r not in preferred_relays]
 
@@ -100,11 +99,11 @@ class RelayList:
     #     return all_relays
 
     @classmethod
-    def get_relays(cls, nips: List[int] = [17, 4]) -> List[str]:
+    def get_relays(cls) -> list[str]:
         # nostr.watch is not working currently
         # all_relays =  cls.get_relays_from_nostr_watch(nips=nips)
         # if all_relays:
         #     return cls._postprocess_relays(all_relays)
 
-        logger.debug(f"Return default list")
+        logger.debug("Return default list")
         return cls._postprocess_relays(get_default_delays())

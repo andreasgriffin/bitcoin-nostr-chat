@@ -1,27 +1,13 @@
 repos:
 
-  - repo: https://github.com/pycqa/isort
-    rev: 5.13.2  # Use the specified version of isort
+  - repo: https://github.com/astral-sh/ruff-pre-commit 
+    rev: v0.13.1  
     hooks:
-      - id: isort
-        args:
-          - --profile=black  # Set the import order style (change 'google' to your preferred style)          
-  - repo: https://github.com/myint/autoflake
-    rev: v2.3.1  # Use the latest version of autoflake
-    hooks:
-      - id: autoflake
-        args:
-          - --expand-star-imports
-          - --remove-all-unused-imports
-          - --remove-unused-variables
-          - --in-place
-          - --exclude=__init__.py
-          - --remove-duplicate-keys 
-  - repo: https://github.com/ambv/black
-    rev: 24.8.0
-    hooks:
-    - id: black
-      language_version: python3.10
+      - id: ruff-check 
+        exclude: ^tests/
+        args: [--fix, --exit-non-zero-on-fix] 
+      - id: ruff-format
+      
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.11.2   # Use the latest MyPy version
     hooks:
@@ -51,3 +37,15 @@ repos:
           - pyqt6 
           - nostr_sdk
  
+
+
+
+  - repo: local
+    hooks:
+      - id: pyright
+        name: Pyright Type Check (npm install -g pyright)
+        entry: bash -c 'if command -v pyright >/dev/null; then pyright; else echo "pyright not installed, skipping..."; exit 0; fi'
+        language: system
+        types: [python]
+        pass_filenames: false
+

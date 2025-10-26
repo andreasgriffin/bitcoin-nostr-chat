@@ -38,8 +38,6 @@ from bitcoin_nostr_chat.group_chat import ChatDM
 from bitcoin_nostr_chat.signals_min import SignalsMin
 from bitcoin_nostr_chat.ui.chat_gui import ChatGui, FileObject
 
-from ..signals_min import SignalsMin
-
 logger = logging.getLogger(__name__)
 
 

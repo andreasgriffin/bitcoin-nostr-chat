@@ -1,13 +1,8 @@
-import logging
-
-from bitcoin_nostr_chat import DEFAULT_USE_COMPRESSION
-
-logging.basicConfig(level=logging.DEBUG)
 import argparse
 import hashlib
 import json
+import logging
 import sys
-from typing import Dict, Optional
 from uuid import uuid4
 
 import bdkpython as bdk
@@ -15,13 +10,16 @@ from nostr_sdk import Keys, SecretKey
 from PyQt6.QtGui import QCloseEvent
 from PyQt6.QtWidgets import QApplication, QMainWindow
 
+from bitcoin_nostr_chat import DEFAULT_USE_COMPRESSION
 from bitcoin_nostr_chat.nostr_sync import NostrSyncWithSingleChats
 from bitcoin_nostr_chat.signals_min import SignalsMin
+
+logging.basicConfig(level=logging.DEBUG)
 
 logger = logging.getLogger(__name__)  # Getting the root logger
 
 
-def save_dict_to_file(dict_obj: Dict, file_path: str):
+def save_dict_to_file(dict_obj: dict, file_path: str):
     """
     Serialize a dictionary and save it to a file in JSON format.
 
@@ -32,7 +30,7 @@ def save_dict_to_file(dict_obj: Dict, file_path: str):
     try:
         with open(file_path, "w") as json_file:
             json.dump(dict_obj, json_file)
-    except IOError as e:
+    except OSError as e:
         print(f"Error saving dictionary to {file_path}: {e}")
 
 
@@ -47,9 +45,9 @@ def load_dict_from_file(file_path: str):
     - The dictionary restored from the file. Returns None if an error occurs.
     """
     try:
-        with open(file_path, "r") as json_file:
+        with open(file_path) as json_file:
             return json.load(json_file)
-    except IOError as e:
+    except OSError as e:
         print(f"Error loading dictionary from {file_path}: {e}")
         return None
     except json.JSONDecodeError as e:
@@ -72,7 +70,6 @@ class DemoApp(QMainWindow):
         if d:
             self.nostr_sync = NostrSyncWithSingleChats.from_dump(d, signals_min=signals_min)
         else:
-
             keys = Keys(
                 secret_key=SecretKey.parse(hashlib.sha256(protcol_secret_str.encode("utf-8")).hexdigest())
             )
@@ -88,14 +85,13 @@ class DemoApp(QMainWindow):
         self.setCentralWidget(self.nostr_sync.ui)
         self.setWindowTitle("Demo App")
 
-    def closeEvent(self, event: Optional[QCloseEvent]) -> None:
+    def closeEvent(self, a0: QCloseEvent | None) -> None:
         save_dict_to_file(self.nostr_sync.dump(), self.file_name)
         self.nostr_sync.close()
-        super().closeEvent(event)
+        super().closeEvent(a0)
 
 
 def parse_args():
-
     parser = argparse.ArgumentParser(description="Demo Nostr Chat")
     parser.add_argument(
         "--file_name", help="A filename to store the details in", default="nostr_demo_app.json"

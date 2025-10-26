@@ -30,7 +30,8 @@
 import asyncio
 import logging
 import threading
-from typing import Awaitable, TypeVar
+from collections.abc import Awaitable, Coroutine
+from typing import Any, TypeVar
 
 from PyQt6.QtCore import QObject, pyqtSignal
 
@@ -166,7 +167,7 @@ class AsyncThread(QObject):
         # Thread-safe scheduling
         self.loop.call_soon_threadsafe(schedule)
 
-    def run_coroutine_blocking(self, coro: Awaitable[T]) -> T:
+    def run_coroutine_blocking(self, coro: Coroutine[Any, Any, T]) -> T:
         """
         Run a coroutine *synchronously* in a fresh event loop.
         This blocks the caller until the coroutine completes,

@@ -29,7 +29,6 @@
 
 import logging
 from datetime import datetime
-from typing import Dict, Optional
 
 from nostr_sdk import Event, PublicKey
 
@@ -46,8 +45,8 @@ class AccouncementDM(BaseDM):
         created_at: datetime,
         please_trust_public_key_bech32: str | None = None,
         name: str | None = None,
-        event: Optional[Event] = None,
-        author: Optional[PublicKey] = None,
+        event: Event | None = None,
+        author: PublicKey | None = None,
         use_compression=DEFAULT_USE_COMPRESSION,
     ) -> None:
         super().__init__(event=event, author=author, created_at=created_at, use_compression=use_compression)
@@ -66,7 +65,7 @@ class AccouncementDM(BaseDM):
             )
         return False
 
-    def dump(self) -> Dict:
+    def dump(self) -> dict:
         d = super().dump()
         d["public_key_bech32"] = self.public_key_bech32
         d["please_trust_public_key_bech32"] = self.please_trust_public_key_bech32

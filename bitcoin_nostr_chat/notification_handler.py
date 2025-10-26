@@ -28,7 +28,8 @@
 
 import logging
 from collections import deque
-from typing import Any, Callable, Iterable, Optional
+from collections.abc import Callable, Iterable
+from typing import Any
 
 import requests
 from bitcoin_safe_lib.gui.qt.signal_tracker import SignalTracker
@@ -36,14 +37,12 @@ from nostr_sdk import (
     Event,
     HandleNotification,
     Keys,
-    KindEnum,
+    KindStandard,
     NostrSigner,
     PublicKey,
     RelayMessage,
-    TagKind,
     UnsignedEvent,
     UnwrappedGift,
-    nip04_decrypt,
 )
 from PyQt6.QtCore import pyqtBoundSignal
 
@@ -51,11 +50,11 @@ from bitcoin_nostr_chat.base_dm import BaseDM
 
 logger = logging.getLogger(__name__)
 
-DM_KIND = KindEnum.PRIVATE_DIRECT_MESSAGE()
-GIFTWRAP = KindEnum.GIFT_WRAP()
+DM_KIND = KindStandard.PRIVATE_DIRECT_MESSAGE
+GIFTWRAP = KindStandard.GIFT_WRAP
 
 
-def fetch_and_parse_json(url: str) -> Optional[Any]:
+def fetch_and_parse_json(url: str) -> Any | None:
     """
     Fetches data from the given URL and parses it as JSON.
 
@@ -68,22 +67,12 @@ def fetch_and_parse_json(url: str) -> Optional[Any]:
     try:
         logger.debug(f"fetch_and_parse_json requests.get({url=})")
         response = requests.get(url, timeout=2)
-        response.raise_for_status()  # Raises an HTTPError if the HTTP request returned an unsuccessful status code
+        # Raises an HTTPError if the HTTP request returned an unsuccessful status code
+        response.raise_for_status()
         return response.json()
     except requests.RequestException as e:
         logger.error(f"An error occurred: {e}")
         return None
-
-
-def get_recipient_public_key_of_nip04(event: Event) -> Optional[PublicKey]:
-    if event.kind().as_enum() != DM_KIND:
-        return None
-    tags = event.tags()
-    tag_standart = tags.find_standardized(TagKind.ENCRYPTED())
-    if tag_standart and tag_standart.is_public_key_tag():
-        recipient_public_key: PublicKey = tag_standart.PUBLIC_KEY_TAG.public_key
-        return recipient_public_key
-    return None
 
 
 class PrintHandler(HandleNotification):
@@ -92,9 +81,7 @@ class PrintHandler(HandleNotification):
         self.name = name
 
     async def handle(self, relay_url, subscription_id, event: Event):
-        logger.debug(
-            f"{self.name}: Received new {event.kind().as_enum()} event from {relay_url}:   {event.as_json()}"
-        )
+        logger.debug(f"{self.name}: Received new {event.kind()} event from {relay_url}:   {event.as_json()}")
 
 
 class NotificationHandler(HandleNotification):
@@ -136,21 +123,17 @@ class NotificationHandler(HandleNotification):
         logger.debug(f"valid dm: {recipient_public_key.to_bech32()=}, {author.to_bech32()=}")
         return True
 
-    async def handle(self, relay_url: "str", subscription_id: "str", event: "Event"):
+    async def handle(self, relay_url: "str", subscription_id: "str", event: "Event"):  # type: ignore
         logger.debug(
-            f"Received new {event.kind().as_enum()} event from {relay_url}:   {event.id().to_bech32()=}"
+            f"Received new {event.kind().as_std()} event from {relay_url}:   {event.id().to_bech32()=}"
         )
-        if event.kind().as_enum() == KindEnum.ENCRYPTED_DIRECT_MESSAGE():
-            try:
-                self.handle_nip04_event(event)
-            except Exception as e:
-                logger.debug(f"Error during content NIP04 decryption: {e}")
-        elif event.kind().as_enum() == KindEnum.GIFT_WRAP():
+        if event.kind().as_std() == KindStandard.GIFT_WRAP:
             logger.debug("Decrypting NIP59 event")
             try:
                 # Extract rumor
                 # from_gift_wrap verifies the seal (encryption) was done correctly
-                # from_gift_wrap should fail, if it is not encrypted with my public key (so it is guaranteed to be for me)
+                # from_gift_wrap should fail, if it is not
+                # encrypted with my public key (so it is guaranteed to be for me)
                 unwrapped_gift: UnwrappedGift = await UnwrappedGift.from_gift_wrap(
                     NostrSigner.keys(self.my_keys), event
                 )
@@ -165,30 +148,16 @@ class NotificationHandler(HandleNotification):
                 rumor: UnsignedEvent = unwrapped_gift.rumor()
 
                 # Check timestamp of rumor
-                if rumor.kind().as_enum() == KindEnum.PRIVATE_DIRECT_MESSAGE():
+                if rumor.kind().as_std() == KindStandard.PRIVATE_DIRECT_MESSAGE:
                     msg = rumor.content()
                     logger.debug(f"Received new msg [sealed]: inside {event.id().to_bech32()=}")
                     self.handle_trusted_dm_for_me(event, sender, msg)
                 else:
                     logger.error(
-                        f"Do not know how to handle {rumor.kind().as_enum()}.  {event.id().to_bech32()=}"
+                        f"Do not know how to handle {rumor.kind().as_std()}.  {event.id().to_bech32()=}"
                     )
             except Exception as e:
                 logger.debug(f"Error during content NIP59 decryption: {e}")
-
-    def handle_nip04_event(self, event: Event):
-        assert event.kind().as_enum() == KindEnum.ENCRYPTED_DIRECT_MESSAGE()
-        recipient_public_key = get_recipient_public_key_of_nip04(event)
-        if not recipient_public_key:
-            logger.debug(f"event {event.id().to_bech32()=} doesnt contain a 04 tag and public key")
-            return
-
-        if not self.is_allowed_message(recipient_public_key=recipient_public_key, author=event.author()):
-            self.untrusted_events.append(event)
-            return
-
-        base85_encoded_data = nip04_decrypt(self.my_keys.secret_key(), event.author(), event.content())
-        self.handle_trusted_dm_for_me(event, event.author(), base85_encoded_data)
 
     def handle_trusted_dm_for_me(self, event: Event, author: PublicKey, base85_encoded_data: str):
         nostr_dm: BaseDM = self.from_serialized(base85_encoded_data)
@@ -224,7 +193,7 @@ class NotificationHandler(HandleNotification):
                 return True
         return False
 
-    async def handle_msg(self, relay_url: "str", msg: "RelayMessage"):
+    async def handle_msg(self, relay_url: "str", msg: "RelayMessage"):  # type: ignore
         return
 
     async def replay_events(

@@ -28,7 +28,6 @@
 
 
 import logging
-from typing import Optional
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
@@ -50,7 +49,7 @@ def is_binary(file_path: str):
     Returns True if binary, False if text.
     """
     try:
-        with open(file_path, "r") as f:
+        with open(file_path) as f:
             for chunk in iter(lambda: f.read(1024), ""):
                 if "\0" in chunk:  # found null byte
                     return True
@@ -65,16 +64,16 @@ def file_to_str(file_path: str):
         with open(file_path, "rb") as f:
             return bytes(f.read()).hex()
     else:
-        with open(file_path, "r") as f:
+        with open(file_path) as f:
             return f.read()
 
 
 def create_custom_message_box(
     icon: QMessageBox.Icon,
-    title: Optional[str],
-    text: Optional[str],
+    title: str | None,
+    text: str | None,
     buttons: QMessageBox.StandardButton = QMessageBox.StandardButton.Ok,
-    parent: Optional[QWidget] = None,
+    parent: QWidget | None = None,
     flags: Qt.WindowType = Qt.WindowType.Widget,
 ):
     msg_box = QMessageBox(parent)
@@ -88,7 +87,7 @@ def create_custom_message_box(
 
 class SecretKeyDialog(QDialog):
     def __init__(self, parent=None):
-        super(SecretKeyDialog, self).__init__(parent)
+        super().__init__(parent)
         self.setWindowTitle("Import Sync key")
 
         # Layout and widgets

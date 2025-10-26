@@ -28,7 +28,7 @@
 import logging
 from abc import abstractmethod
 from datetime import datetime, timedelta
-from typing import Dict, List, Set
+from functools import partial
 
 import bdkpython as bdk
 from bitcoin_qr_tools.data import DataType
@@ -63,8 +63,8 @@ class BaseProtocol(QObject):
         self.sync_start = sync_start
         self.network = network
 
-        self.dm_connection = (
-            DmConnection.from_dump(
+        if dm_connection_dump:
+            self.dm_connection = DmConnection.from_dump(
                 d=dm_connection_dump,
                 signal_dm=self.signal_dm,
                 from_serialized=self.from_serialized,
@@ -72,15 +72,16 @@ class BaseProtocol(QObject):
                 network=network,
                 parent=self,
             )
-            if dm_connection_dump
-            else DmConnection(
+        elif keys:
+            self.dm_connection = DmConnection(
                 self.signal_dm,
                 from_serialized=self.from_serialized,
                 keys=keys,
                 get_currently_allowed=self.get_currently_allowed,
                 parent=self,
             )
-        )
+        else:
+            raise Exception("Either dm_connection_dump or keys must be specified")
 
     def my_public_key(self) -> PublicKey:
         return self.dm_connection.async_dm_connection.keys.public_key()
@@ -117,7 +118,7 @@ class BaseProtocol(QObject):
         self.refresh_dm_connection(relay_list=relay_list, sync_start=None)
 
     @abstractmethod
-    def get_currently_allowed(self) -> Set[str]:
+    def get_currently_allowed(self) -> set[str]:
         pass
 
     def close(self):
@@ -132,7 +133,7 @@ class NostrProtocol(BaseProtocol):
         network: bdk.Network,
         sync_start: datetime | None,
         keys: Keys | None = None,
-        dm_connection_dump: Dict | None = None,
+        dm_connection_dump: dict | None = None,
         use_compression=DEFAULT_USE_COMPRESSION,
         parent: QObject | None = None,
     ) -> None:
@@ -146,7 +147,7 @@ class NostrProtocol(BaseProtocol):
         )
         self.use_compression = use_compression
 
-    def get_currently_allowed(self) -> Set[str]:
+    def get_currently_allowed(self) -> set[str]:
         return set([self.my_public_key().to_bech32()])
 
     def from_serialized(self, base85_encoded_data: str) -> AccouncementDM:
@@ -189,14 +190,14 @@ class NostrProtocol(BaseProtocol):
         return {
             # start_time saves the last shutdown time
             # the next starttime is the current time
-            "sync_start": None,  # the nostr protocol should always sync everything  #  datetime.now().timestamp(),
+            "sync_start": None,  # the nostr protocol should always sync everything
             "dm_connection_dump": self.dm_connection.dump(),
             "use_compression": self.use_compression,
             "network": self.network.name,
         }
 
     @classmethod
-    def from_dump(cls, d: Dict) -> "NostrProtocol":
+    def from_dump(cls, d: dict) -> "NostrProtocol":
         # start_time saves the last shutdown time
         d["sync_start"] = (
             datetime.fromtimestamp(d["sync_start"]) if ("sync_start" in d) and d["sync_start"] else None
@@ -214,13 +215,13 @@ class GroupChat(BaseProtocol):
         sync_start: datetime | None,
         keys: Keys | None = None,
         dm_connection_dump: dict | None = None,
-        members: List[PublicKey] | None = None,
+        members: list[PublicKey] | None = None,
         use_compression=DEFAULT_USE_COMPRESSION,
-        aliases: Dict[str, str] | None = None,
+        aliases: dict[str, str] | None = None,
         parent: QObject | None = None,
     ) -> None:
         "Either keys or dm_connection_dump must be given"
-        self.members: List[PublicKey] = members if members else []
+        self.members: list[PublicKey] = members if members else []
         self.aliases = aliases if aliases else {}
         self.use_compression = use_compression
         self.nip17_time_uncertainty = timedelta(
@@ -234,7 +235,7 @@ class GroupChat(BaseProtocol):
             network=network,
         )
 
-    def get_currently_allowed(self) -> Set[str]:
+    def get_currently_allowed(self) -> set[str]:
         return set([member.to_bech32() for member in self.members_including_me()])
 
     def from_serialized(self, base85_encoded_data: str) -> ChatDM:
@@ -254,22 +255,23 @@ class GroupChat(BaseProtocol):
             self.dm_connection.unsubscribe([remove_member])
             logger.debug(f"Removed {remove_member.to_bech32()=}")
 
-    def _send_copy_to_myself(self, dm: ChatDM, receiver: PublicKey, send_to_other_event_id: EventId):
+    def _send_copy_to_myself(self, dm: ChatDM, receiver: PublicKey, send_to_other_event_id: EventId | None):
         logger.debug(
-            f"Successfully sent to {receiver.to_bech32()=} ({send_to_other_event_id=}) and now send copy to myself"
+            f"Successfully sent to {receiver.to_bech32()=} ({send_to_other_event_id=})"
+            " and now send copy to myself"
         )
         copy_dm = ChatDM.from_dump(dm.dump(), network=self.network)
         copy_dm.use_compression = dm.use_compression
         copy_dm.event = None
         self.dm_connection.send(copy_dm, receiver=self.my_public_key())
 
-    def send_to(self, dm: ChatDM, recipients: List[PublicKey], send_also_to_me=True):
+    def send_to(self, dm: ChatDM, recipients: list[PublicKey], send_also_to_me=True):
         for public_key in recipients:
             on_done = None
             if send_also_to_me and public_key == self.members[-1]:
                 # for the last recipient, make a callback to send a copy to myself
                 # such that, if the last recipient gets it, then i get a copy too
-                on_done = lambda event_id: self._send_copy_to_myself(dm, public_key, event_id)
+                on_done = partial(self._send_copy_to_myself, dm, public_key)
             self.dm_connection.send(dm, public_key, on_done=on_done)
             logger.debug(f"Send to {public_key.to_bech32()=}")
 
@@ -304,7 +306,7 @@ class GroupChat(BaseProtocol):
         }
 
     @classmethod
-    def from_dump(cls, d: Dict) -> "GroupChat":
+    def from_dump(cls, d: dict) -> "GroupChat":
         # start_time saves the last shutdown time
         d["sync_start"] = (
             datetime.fromtimestamp(d["sync_start"]) if ("sync_start" in d) and d["sync_start"] else None
@@ -330,9 +332,6 @@ class GroupChat(BaseProtocol):
                     member,
                 )
             )
-
-            # self.dm_connection.send(ProtocolDM(event=None, public_key_bech32=keys.public_key().to_bech32(),please_trust_public_key_bech32=True), member)
-            # logger.debug(f"Send my new public key {keys.public_key().to_bech32()} to {member.to_bech32()}")
 
         keys = keys if keys else Keys.generate()
         self.refresh_dm_connection(keys)
