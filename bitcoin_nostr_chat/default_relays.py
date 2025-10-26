@@ -5,12 +5,12 @@ def get_preferred_relays() -> list[str]:
         "wss://nostr.sathoarder.com",
         "wss://nostr.einundzwanzig.space",
         "wss://nostr.vulpem.com",
+        "wss://relay.damus.io",
         "wss://nostr-1.nbo.angani.co",
         "wss://strfry.openhoofd.nl",
         "wss://rocky.nostr1.com",
         "wss://nostr-01.yakihonne.com",
         "wss://relay.satlantis.io",
-        "wss://nostr.frostr.xyz",
     ]
 
 
@@ -155,7 +155,6 @@ def get_default_delays() -> list[str]:
         "wss://dwebcamp.nos.social",
         "wss://ithurtswhenip.ee",
         "wss://strfry.bonsai.com",
-        "wss://nostr.frostr.xyz",
         "wss://antisocial.nostr1.com",
         "wss://relay.livefreebtc.dev",
         "wss://relay.wellorder.net",
