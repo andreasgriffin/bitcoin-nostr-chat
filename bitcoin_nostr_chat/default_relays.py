@@ -1,7 +1,4 @@
-from typing import List
-
-
-def get_preferred_relays() -> List[str]:
+def get_preferred_relays() -> list[str]:
     return [
         "wss://bucket.coracle.social",
         "wss://relay.primal.net",
@@ -17,7 +14,7 @@ def get_preferred_relays() -> List[str]:
     ]
 
 
-def get_default_delays() -> List[str]:
+def get_default_delays() -> list[str]:
     # sources:
     # https://nostr.info/relays/
     # https://nostrwat.ch/

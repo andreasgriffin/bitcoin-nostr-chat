@@ -31,7 +31,6 @@ import enum
 import json
 import logging
 from datetime import datetime
-from typing import Dict, Optional
 
 import bdkpython as bdk
 from bitcoin_qr_tools.data import Data
@@ -66,8 +65,8 @@ class ChatDM(BaseDM):
         description: str,
         data: Data | None = None,
         intended_recipient: str | None = None,
-        event: Optional[Event] = None,
-        author: Optional[PublicKey] = None,
+        event: Event | None = None,
+        author: PublicKey | None = None,
         use_compression=DEFAULT_USE_COMPRESSION,
     ) -> None:
         super().__init__(event=event, author=author, created_at=created_at, use_compression=use_compression)
@@ -76,7 +75,7 @@ class ChatDM(BaseDM):
         self.data = data
         self.intended_recipient = intended_recipient
 
-    def dump(self) -> Dict:
+    def dump(self) -> dict:
         d = super().dump()
         d["label"] = self.label.value
         d["description"] = self.description
@@ -85,7 +84,7 @@ class ChatDM(BaseDM):
         return self.delete_none_entries(d)
 
     @classmethod
-    def from_dump(cls, d: Dict, network: bdk.Network) -> "ChatDM":
+    def from_dump(cls, d: dict, network: bdk.Network):
         d["label"] = ChatLabel.from_value(d.get("label", ChatLabel.GroupChat.value))
         d["data"] = Data.from_dump(d["data"], network=network) if d.get("data") else None
         return super().from_dump(d, network)

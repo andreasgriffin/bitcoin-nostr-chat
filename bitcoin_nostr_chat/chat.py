@@ -29,7 +29,6 @@
 
 import logging
 from datetime import datetime
-from typing import List
 
 import bdkpython as bdk
 from bitcoin_qr_tools.data import Data, DataType
@@ -46,8 +45,7 @@ from bitcoin_nostr_chat.ui.bitcoin_dm_chat_gui import BitcoinDmChatGui
 from bitcoin_nostr_chat.ui.chat_gui import FileObject
 from bitcoin_nostr_chat.ui.util import chat_color, short_key
 
-from .group_chat import ChatDM, GroupChat
-from .signals_min import SignalsMin
+from .group_chat import ChatDM
 
 logger = logging.getLogger(__name__)
 
@@ -118,16 +116,16 @@ class Chat(BaseChat):
         network: bdk.Network,
         group_chat: GroupChat,
         signals_min: SignalsMin,
-        restrict_to_counterparties: List[PublicKey] | None = None,
-        display_labels=[ChatLabel.GroupChat, ChatLabel.SingleRecipient],
-        display_file_types=[DataType.PSBT, DataType.Tx],
+        restrict_to_counterparties: list[PublicKey] | None = None,
+        display_labels: list[ChatLabel] | None = None,
+        display_file_types: list[DataType] | None = None,
         send_label=ChatLabel.GroupChat,
     ) -> None:
         super().__init__(network=network, group_chat=group_chat, signals_min=signals_min)
-        self.display_labels = display_labels
+        self.display_labels = display_labels or [ChatLabel.GroupChat, ChatLabel.SingleRecipient]
         self.send_label = send_label
         self.restrict_to_counterparties = restrict_to_counterparties
-        self.display_file_types = display_file_types
+        self.display_file_types = display_file_types or [DataType.PSBT, DataType.Tx]
 
         # signals
         self.signal_tracker.connect(self.group_chat.signal_dm, self.add_to_chat)
@@ -137,7 +135,8 @@ class Chat(BaseChat):
     def add_to_chat(self, dm: ChatDM):
         if not dm.author:
             logger.debug(
-                f"{self.__class__.__name__}: Dropping dm, because {dm.author=}, and with that author can be determined."
+                f"{self.__class__.__name__}: Dropping dm, because {dm.author=},"
+                " and with that author can be determined."
             )
             return
 

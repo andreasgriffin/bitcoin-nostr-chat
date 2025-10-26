@@ -30,8 +30,8 @@
 import asyncio
 import logging
 from collections import deque
+from collections.abc import Callable, Iterable
 from datetime import datetime
-from typing import Callable, Dict, Iterable, List, Optional, Set
 
 import bdkpython as bdk
 from bitcoin_qr_tools.data import DataType
@@ -45,6 +45,7 @@ from nostr_sdk import (
     PublicKey,
     Relay,
     RelayStatus,
+    RelayUrl,
     SecretKey,
     Timestamp,
 )
@@ -70,7 +71,7 @@ class AsyncDmConnection(QObject):
         signal_dm: pyqtBoundSignal,
         from_serialized: Callable[[str], BaseDM],
         keys: Keys,
-        get_currently_allowed: Callable[[], Set[str]],
+        get_currently_allowed: Callable[[], set[str]],
         use_timer: bool = False,
         dms_from_dump: Iterable[BaseDM] | None = None,
         relay_list: RelayList | None = None,
@@ -86,7 +87,7 @@ class AsyncDmConnection(QObject):
 
         # self.dms_from_dump is used for replaying events from dump
         self.dms_from_dump: deque[BaseDM] = deque(dms_from_dump) if dms_from_dump else deque()
-        self.current_subscription_dict: Dict[str, PublicKey] = {}  # subscription_id: PublicKey
+        self.current_subscription_dict: dict[str, PublicKey] = {}  # subscription_id: PublicKey
         self.timer = QTimer()
 
         self.create_clients(keys)
@@ -139,15 +140,14 @@ class AsyncDmConnection(QObject):
                     return True
         return False
 
-    async def get_connected_relays(self, client: Client) -> List[Relay]:
-
+    async def get_connected_relays(self, client: Client) -> list[Relay]:
         relays = await client.relays()
-        connected_relays: List[Relay] = [
+        connected_relays: list[Relay] = [
             relay for relay in relays.values() if relay.status() == RelayStatus.CONNECTED
         ]
         return connected_relays
 
-    async def send(self, dm: BaseDM, receiver: PublicKey) -> Optional[EventId]:
+    async def send(self, dm: BaseDM, receiver: PublicKey) -> EventId | None:
         await self.ensure_connected_to_relays()
         try:
             serialized_dm = dm.serialize()
@@ -158,15 +158,15 @@ class AsyncDmConnection(QObject):
             logger.error(f"Error sending direct message: {e}")
             return None
 
-    def _get_filters(self, recipient: PublicKey, start_time: datetime | None = None) -> List[Filter]:
-        this_filter = Filter().pubkey(recipient).kinds([Kind.from_enum(DM_KIND), Kind.from_enum(GIFTWRAP)])
+    def _get_filter(self, recipient: PublicKey, start_time: datetime | None = None) -> Filter:
+        this_filter = Filter().pubkey(recipient).kinds([Kind.from_std(DM_KIND), Kind.from_std(GIFTWRAP)])
 
         if start_time:
             timestamp = Timestamp.from_secs(int(start_time.timestamp()))
             logger.error(f"Subscribe to {recipient.to_bech32()} from {timestamp.to_human_datetime()}")
             this_filter = this_filter.since(timestamp=timestamp)
 
-        return [this_filter]
+        return this_filter
 
     async def subscribe(self, start_time: datetime | None = None) -> str | None:
         "overwrites previous filters"
@@ -174,7 +174,7 @@ class AsyncDmConnection(QObject):
         await self.ensure_connected_to_relays()
         self._start_timer()
 
-        filters = self._get_filters(self.keys.public_key(), start_time=start_time)
+        filters = self._get_filter(self.keys.public_key(), start_time=start_time)
         logger.debug(f"Subscribe to {filters}")
         subscribe_output = await self.client_notification.subscribe(filters, opts=None)
         if subscribe_output.failed:
@@ -190,7 +190,7 @@ class AsyncDmConnection(QObject):
     async def unsubscribe_all(self):
         await self.unsubscribe(list(self.current_subscription_dict.values()))
 
-    async def unsubscribe(self, public_keys: List[PublicKey]):
+    async def unsubscribe(self, public_keys: list[PublicKey]):
         for subscription_id, pub_key in list(self.current_subscription_dict.items()):
             if pub_key in public_keys:
                 await self.client_notification.unsubscribe(subscription_id)
@@ -227,7 +227,7 @@ class AsyncDmConnection(QObject):
             self.minimum_connect_relays + self.counter_no_connected_relay
         )
         for relay in relay_subset:
-            await client.add_relay(relay)
+            await client.add_relay(RelayUrl.parse(relay))
         await client.connect()
         await asyncio.sleep(0.2)
         # sleep so get_connected_relays is accurate
@@ -241,7 +241,7 @@ class AsyncDmConnection(QObject):
 
     def dump(
         self,
-        forbidden_data_types: List[DataType] | None = None,
+        forbidden_data_types: list[DataType] | None = None,
     ):
         def include_item(item: BaseDM) -> bool:
             if isinstance(item, ChatDM):
@@ -261,7 +261,8 @@ class AsyncDmConnection(QObject):
             # TODO: This might be added in the future,
             # to allow restoring labels from devices that are connected after the wallet has been shut down
             # "untrusted_events": [
-            #     item.dump() for item in self.notification_handler.untrusted_events if item and include_item(item)
+            #     item.dump() for item in self.notification_handler.untrusted_events
+            #                             if item and include_item(item)
             # ],
             "relay_list": self.relay_list.dump(),
         }
@@ -269,10 +270,10 @@ class AsyncDmConnection(QObject):
     @classmethod
     def from_dump(
         cls,
-        d: Dict,
+        d: dict,
         signal_dm: pyqtBoundSignal,
         from_serialized: Callable[[str], BaseDM],
-        get_currently_allowed: Callable[[], Set[str]],
+        get_currently_allowed: Callable[[], set[str]],
         network: bdk.Network,
     ) -> "AsyncDmConnection":
         d["keys"] = Keys(secret_key=SecretKey.parse(d["keys"]))

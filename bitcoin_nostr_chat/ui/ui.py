@@ -28,10 +28,10 @@
 
 
 import logging
-from typing import Callable, Optional
+from collections.abc import Callable
 
 from nostr_sdk import Keys
-from PyQt6 import QtCore, QtWidgets
+from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QDialog,
@@ -109,7 +109,7 @@ class UI(QtWidgets.QWidget):
         my_keys: Keys,
         signals_min: SignalsMin,
         individual_chats_visible=True,
-        get_relay_list: Callable[[], Optional[RelayList]] | None = None,
+        get_relay_list: Callable[[], RelayList | None] | None = None,
     ) -> None:
         super().__init__()
         self.signals_min = signals_min
@@ -169,7 +169,8 @@ class UI(QtWidgets.QWidget):
         msg.setIcon(QMessageBox.Icon.Information)
         msg.setText(
             self.tr(
-                "Your sync key is:\n\n{sync_key}\n\n Save it, and when you click 'import sync key', it should restore your labels from the nostr relays."
+                "Your sync key is:\n\n{sync_key}\n\n Save it,"
+                " and when you click 'import sync key', it should restore your labels from the nostr relays."
             ).format(sync_key=self.my_keys.secret_key().to_bech32())
         )
         msg.setWindowTitle(self.tr("Sync key Export"))
@@ -218,6 +219,6 @@ class UI(QtWidgets.QWidget):
         self.my_keys = my_keys
         self.updateUi()
 
-    def closeEvent(self, event):
+    def closeEvent(self, a0: QtGui.QCloseEvent | None) -> None:
         self.signal_close_event.emit()
-        super().closeEvent(event)
+        super().closeEvent(a0)

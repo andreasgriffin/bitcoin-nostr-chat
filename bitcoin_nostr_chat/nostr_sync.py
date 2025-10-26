@@ -29,7 +29,7 @@
 
 import logging
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional
+from typing import Any
 
 import bdkpython as bdk
 from bitcoin_qr_tools.data import Data, DataType
@@ -50,9 +50,7 @@ from bitcoin_nostr_chat.ui.util import chat_color, get_input_text, short_key
 from bitcoin_nostr_chat.utils import filtered_for_init
 
 from .chat import Chat
-from .group_chat import GroupChat, Keys
 from .html import html_f
-from .signals_min import SignalsMin
 from .ui.ui import UI
 
 logger = logging.getLogger(__name__)
@@ -64,7 +62,7 @@ def is_binary(file_path: str):
     Returns True if binary, False if text.
     """
     try:
-        with open(file_path, "r") as f:
+        with open(file_path) as f:
             for chunk in iter(lambda: f.read(1024), ""):
                 if "\0" in chunk:  # found null byte
                     return True
@@ -79,12 +77,11 @@ def file_to_str(file_path: str):
         with open(file_path, "rb") as f:
             return bytes(f.read()).hex()
     else:
-        with open(file_path, "r") as f:
+        with open(file_path) as f:
             return f.read()
 
 
 class BaseNostrSync(QObject):
-
     signal_set_alias = pyqtSignal(str, str)
     signal_remove_trusted_device = pyqtSignal(str)
     signal_add_trusted_device = pyqtSignal(str)
@@ -163,9 +160,9 @@ class BaseNostrSync(QObject):
         try:
             keys = Keys(SecretKey.parse(nsec))
             self.reset_own_key(keys=keys)
-        except:
+        except Exception as e:
             create_custom_message_box(
-                QMessageBox.Icon.Warning, "Error", f"Error in importing the nsec {nsec}"
+                QMessageBox.Icon.Warning, "Error", f"Error in importing the nsec {nsec}.\n{e}"
             )
             return
 
@@ -211,7 +208,7 @@ class BaseNostrSync(QObject):
             parent=parent,
         )
 
-    def dump(self) -> Dict[str, Any]:
+    def dump(self) -> dict[str, Any]:
         d = {}
         # exclude my own key. It's pointless to save and
         # later replay (internally) protocol messages that i sent previously
@@ -225,7 +222,7 @@ class BaseNostrSync(QObject):
     @classmethod
     def from_dump(
         cls,
-        d: Dict[str, Any],
+        d: dict[str, Any],
         signals_min: SignalsMin,
         parent: QObject | None = None,
     ):
@@ -277,7 +274,7 @@ class BaseNostrSync(QObject):
         self.ui.device_manager.untrust(member.to_bech32())
         self.group_chat.remove_member(member)
 
-    def get_singlechat_counterparty(self, dm: ChatDM) -> Optional[str]:
+    def get_singlechat_counterparty(self, dm: ChatDM) -> str | None:
         if dm.label != ChatLabel.SingleRecipient:
             return None
 
@@ -422,7 +419,6 @@ class NostrSync(BaseNostrSync):
 
 
 class NostrSyncWithSingleChats(BaseNostrSync):
-
     def __init__(
         self,
         network: bdk.Network,
@@ -458,7 +454,7 @@ class NostrSyncWithSingleChats(BaseNostrSync):
         )
         self.ui.tabs.addTab(self.chat.gui, self.tr("Chat"))
 
-        self.chats: Dict[str, Chat] = {}
+        self.chats: dict[str, Chat] = {}
 
         self.signal_tracker.connect(self.signal_add_trusted_device, self.add_chat_for_trusted_device)
         self.signal_tracker.connect(self.signal_remove_trusted_device, self.remove_chat_for_trusted_device)

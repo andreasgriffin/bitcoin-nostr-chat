@@ -30,7 +30,6 @@
 import os
 import sys
 from datetime import datetime, timedelta
-from typing import List, Optional
 
 from bitcoin_qr_tools.data import Data
 from bitcoin_safe_lib.util import insert_invisible_spaces_for_wordwrap
@@ -87,17 +86,17 @@ class ChatListWidget(QListWidget):
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.show_context_menu)
 
-    def keyPressEvent(self, event: QKeyEvent | None) -> None:
-        if not event:
+    def keyPressEvent(self, e: QKeyEvent | None) -> None:
+        if not e:
             return
         # When CTRL+C is pressed, copy selected items in display order to the clipboard.
-        if event.key() == Qt.Key.Key_C and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+        if e.key() == Qt.Key.Key_C and e.modifiers() & Qt.KeyboardModifier.ControlModifier:
             self.copy_selected_items()
         else:
-            super().keyPressEvent(event)
+            super().keyPressEvent(e)
 
     def copy_selected_items(self) -> None:
-        texts: List[str] = []
+        texts: list[str] = []
         # Iterate over items in display order.
         for i in range(self.count()):
             if (item := self.item(i)) and item.isSelected():
@@ -126,7 +125,7 @@ class ChatComponent(QWidget):
     # New signal emitted when an attachment is clicked
     signal_attachement_clicked = pyqtSignal(FileObject)
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)  # Left, Top, Right, Bottom margins
@@ -144,11 +143,11 @@ class ChatComponent(QWidget):
 
     def on_item_clicked(self, item: QListWidgetItem) -> None:
         self.itemClicked.emit(item)
-        file_obj: Optional[FileObject] = item.data(ChatListWidget.ROLE_DATA)
+        file_obj: FileObject | None = item.data(ChatListWidget.ROLE_DATA)
         if file_obj is not None:
             self.signal_attachement_clicked.emit(file_obj)
 
-    def addItem(self, text: str, created_at: datetime, icon: Optional[QIcon] = None) -> SortedListWidgetItem:
+    def addItem(self, text: str, created_at: datetime, icon: QIcon | None = None) -> SortedListWidgetItem:
         """
         Adds an item with the given text, stores the creation datetime in ROLE_SORT,
         and optionally sets an icon. The item is automatically sorted.

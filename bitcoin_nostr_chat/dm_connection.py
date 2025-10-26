@@ -28,8 +28,8 @@
 
 import logging
 from collections import deque
+from collections.abc import Callable
 from datetime import datetime
-from typing import Callable, Dict, List, Optional, Set
 
 import bdkpython as bdk
 from bitcoin_qr_tools.data import DataType
@@ -52,7 +52,7 @@ class DmConnection(QObject):
         signal_dm: pyqtBoundSignal,
         from_serialized: Callable[[str], BaseDM],
         keys: Keys,
-        get_currently_allowed: Callable[[], Set[str]],
+        get_currently_allowed: Callable[[], set[str]],
         use_timer: bool = False,
         dms_from_dump: deque[ChatDM] | None = None,
         relay_list: RelayList | None = None,
@@ -90,10 +90,10 @@ class DmConnection(QObject):
     @classmethod
     def from_dump(
         cls,
-        d: Dict,
+        d: dict,
         signal_dm: pyqtBoundSignal,
         from_serialized: Callable[[str], BaseDM],
-        get_currently_allowed: Callable[[], Set[str]],
+        get_currently_allowed: Callable[[], set[str]],
         network: bdk.Network,
         parent: QObject | None = None,
     ) -> "DmConnection":
@@ -115,13 +115,11 @@ class DmConnection(QObject):
 
     def dump(
         self,
-        forbidden_data_types: List[DataType] | None = None,
+        forbidden_data_types: list[DataType] | None = None,
     ):
         return self.async_dm_connection.dump(forbidden_data_types=forbidden_data_types)
 
-    def send(
-        self, dm: BaseDM, receiver: PublicKey, on_done: Callable[[Optional[EventId]], None] | None = None
-    ):
+    def send(self, dm: BaseDM, receiver: PublicKey, on_done: Callable[[EventId | None], None] | None = None):
         self.async_thread.queue_coroutine(self.async_dm_connection.send(dm, receiver), on_done=on_done)
 
     def get_connected_relays(self) -> RelayList:
@@ -133,7 +131,7 @@ class DmConnection(QObject):
         )
 
         return RelayList(
-            relays=list(set([relay.url() for relay in list_send + list_notification])),
+            relays=list(set([str(relay.url()) for relay in list_send + list_notification])),
             last_updated=datetime.now(),
         )
 
@@ -143,7 +141,7 @@ class DmConnection(QObject):
     def subscribe(self, start_time: datetime | None = None, on_done: Callable[[str], None] | None = None):
         self.async_thread.queue_coroutine(self.async_dm_connection.subscribe(start_time), on_done=on_done)
 
-    def unsubscribe(self, public_keys: List[PublicKey], on_done: Callable[[], None] | None = None):
+    def unsubscribe(self, public_keys: list[PublicKey], on_done: Callable[[], None] | None = None):
         self.async_thread.queue_coroutine(self.async_dm_connection.unsubscribe(public_keys), on_done=on_done)
 
     def replay_events_from_dump(self, on_done: Callable[[], None] | None = None):

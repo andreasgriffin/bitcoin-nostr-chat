@@ -131,9 +131,9 @@ class ChatGui(QWidget):
 
         self._layout.addLayout(self.dynamicLayout)
 
-    def resizeEvent(self, event: QResizeEvent | None) -> None:
+    def resizeEvent(self, a0: QResizeEvent | None) -> None:
         self.updateDynamicLayout()
-        super().resizeEvent(event)
+        super().resizeEvent(a0)
 
     def on_send_hit(self):
         text = self.textInput.text().strip()
@@ -200,7 +200,6 @@ if __name__ == "__main__":
             self.chatGui.signal_on_message_send.connect(self.handleMessage)
 
         def handleMessage(self, text):
-
             self.chatGui.add(
                 datetime.now(),
                 text=f"you said {text}",
@@ -225,7 +224,7 @@ if __name__ == "__main__":
 
         demoApp.chatGui.add(
             datetime.now(),
-            text=f"sending relay list",
+            text="sending relay list",
             file_object=None,
             color=QColor(),
             is_me=False,
