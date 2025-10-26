@@ -80,23 +80,6 @@ class AsyncThread(QObject):
             multiple_strategy=MultipleStrategy.QUEUE,
         )
 
-    def run_coroutine_parallel(self, coro_func: Coroutine[Any, Any, T], callback=None):
-        """Schedule a coroutine to run without waiting for queued tasks."""
-
-        def on_success(result):
-            self._emit_result(result, coro_func, callback)
-
-        def on_error(exc_info):
-            self._emit_error(exc_info, coro_func, callback)
-
-        logger.debug("Run coroutine in parallel: %s", coro_func)
-        self._loop.run_task(
-            coro_func,
-            on_success=on_success,
-            on_error=on_error,
-            multiple_strategy=MultipleStrategy.RUN_INDEPENDENT,
-        )
-
     def run_coroutine_blocking(self, coro: Coroutine[Any, Any, T]) -> T:
         """Run a coroutine synchronously and return its result."""
 

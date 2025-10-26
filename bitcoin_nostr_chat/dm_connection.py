@@ -149,10 +149,10 @@ class DmConnection(QObject):
         self.async_thread.queue_coroutine(self.async_dm_connection.replay_events_from_dump(), on_done=on_done)
 
     def disconnect_clients(self):
-        self.async_thread.run_coroutine_blocking(
+        self.async_thread.queue_coroutine(
             self.async_dm_connection.disconnect_client(self.async_dm_connection.client_send)
         )
-        self.async_thread.run_coroutine_blocking(
+        self.async_thread.queue_coroutine(
             self.async_dm_connection.disconnect_client(self.async_dm_connection.client_notification)
         )
 
@@ -163,6 +163,3 @@ class DmConnection(QObject):
 
     def queue_coroutine(self, coro: Coroutine[Any, Any, T], on_done: Callable[[], None] | None = None):
         self.async_thread.queue_coroutine(coro, on_done=on_done)
-
-    def run_blocking(self, coro):
-        self.async_thread.run_coroutine_blocking(coro)
