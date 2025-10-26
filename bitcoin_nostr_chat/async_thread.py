@@ -27,12 +27,11 @@
 # SOFTWARE.
 
 
-import asyncio
 import logging
-import threading
-from collections.abc import Awaitable, Coroutine
+from collections.abc import Coroutine
 from typing import Any, TypeVar
 
+from bitcoin_safe_lib.async_tools.loop_in_thread import LoopInThread, MultipleStrategy
 from PyQt6.QtCore import QObject, pyqtSignal
 
 logger = logging.getLogger(__name__)
@@ -43,144 +42,63 @@ T = TypeVar("T")  # Represents the type of the result returned by the coroutine
 class AsyncThread(QObject):
     """Manage an asyncio event loop on a dedicated Python thread."""
 
-    result_ready = pyqtSignal(object, object, object)  #  result, coro_func, on_done
+    result_ready = pyqtSignal(object, object, object)  # result, coro_func, on_done
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        # Create a new event loop for this thread (do not set globally yet).
-        self.loop = asyncio.new_event_loop()
-        self.loop_started = threading.Event()
-        self.task_queue: asyncio.Queue | None = None
-        self._thread = threading.Thread(target=self._run_loop, name="AsyncThreadLoop", daemon=True)
-        self._thread.start()
+        self._loop = LoopInThread()
+        self._queue_key = "async-thread-queue"
 
-    def _run_loop(self):
-        """Entry point for the worker thread; set and run the asyncio event loop."""
-        # Bind this event loop to the current thread.
-        asyncio.set_event_loop(self.loop)
-        # Create the asyncio queue within the thread context.
-        self.task_queue = asyncio.Queue()
+    def _emit_result(self, result: object, coro: Coroutine[Any, Any, Any], callback):
+        logger.debug("Task finished: %s", coro)
+        self.result_ready.emit(result, coro, callback)
 
-        # Signal that the event loop is ready.
-        self.loop_started.set()
-
-        # Schedule our task processor in the event loop.
-        asyncio.ensure_future(self._process_tasks(), loop=self.loop)
-
-        # Run the event loop forever (until we explicitly stop it).
-        try:
-            self.loop.run_forever()
-        finally:
-            self._cleanup_loop()
-
-    async def _process_tasks(self):
-        """Continuously process tasks from the queue in chronological order."""
-        while True:
-            await asyncio.sleep(0.01)
-            logger.debug(f"{self.__class__.__name__}: Waiting for task...")
-            if self.task_queue is None:
-                raise RuntimeError("Event loop queue has not been initialised.")
-            coro_func, on_done = await self.task_queue.get()
-            logger.debug(f"Task received: {coro_func}")
-            try:
-                result = await coro_func
-                logger.debug(f"Task done: {coro_func}")
-                self.result_ready.emit(result, coro_func, on_done)
-            except Exception as e:
-                logger.debug(f"Task failed: {e}")
-                self.result_ready.emit(e, coro_func, on_done)
-            self.task_queue.task_done()
-
-    def _cleanup_loop(self):
-        """Cancel pending tasks and close the loop."""
-        # Cancel all running tasks
-        tasks = [t for t in asyncio.all_tasks(self.loop) if not t.done()]
-        for task in tasks:
-            task.cancel()
-        self.loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
-        self.loop.close()
-        self.task_queue = None
+    def _emit_error(self, exc_info, coro: Coroutine[Any, Any, Any], callback):
+        exc = exc_info[1] if exc_info and len(exc_info) > 1 else Exception("Unknown error")
+        logger.debug("Task failed: %s", exc)
+        self.result_ready.emit(exc, coro, callback)
 
     def stop(self):
         """Stop the event loop (if needed) and wait for the thread to finish."""
-        if not self.loop_started.is_set():
-            self.loop_started.wait()
+        self._loop.stop()
 
-        if self.loop.is_running():
-            # Schedule loop.stop() to run from within the event loop
-            self.loop.call_soon_threadsafe(self.loop.stop)
+    def queue_coroutine(self, coro_func: Coroutine[Any, Any, T], on_done=None):
+        """Schedule a coroutine to run sequentially on the worker loop."""
 
-        if self._thread.is_alive():
-            # Wait for the worker thread to exit
-            self._thread.join()
+        def on_success(result):
+            self._emit_result(result, coro_func, on_done)
 
-    def queue_coroutine(self, coro_func: Awaitable, on_done=None):
-        """
-        Thread-safe scheduling of a coroutine function + arguments.
-        Adds the (function, args, kwargs) tuple into the queue
-        within the event loop's thread.
-        """
-        # Ensure the event loop is running before posting tasks.
-        if not self.loop_started.is_set():
-            logger.debug("Event loop not ready yet.")
-            self.loop_started.wait()  # Block until the event loop is ready
+        def on_error(exc_info):
+            self._emit_error(exc_info, coro_func, on_done)
 
-        def put_item():
-            logger.debug(f"Add to queue {coro_func}")
-            if self.task_queue is None:
-                raise RuntimeError("Event loop queue has not been initialised.")
-            self.task_queue.put_nowait((coro_func, on_done))
+        logger.debug("Queue coroutine: %s", coro_func)
+        self._loop.run_task(
+            coro_func,
+            on_success=on_success,
+            on_error=on_error,
+            key=self._queue_key,
+            multiple_strategy=MultipleStrategy.QUEUE,
+        )
 
-        # Schedule the queue put in a thread-safe manner.
-        if not self.loop.is_closed():
-            self.loop.call_soon_threadsafe(put_item)
-        else:
-            logger.warning("Event loop is closed; cannot schedule tasks anymore.")
+    def run_coroutine_parallel(self, coro_func: Coroutine[Any, Any, T], callback=None):
+        """Schedule a coroutine to run without waiting for queued tasks."""
 
-    def run_coroutine_parallel(self, coro_func: Awaitable, callback=None):
-        """
-        Schedules a coroutine to run immediately (in parallel to other tasks),
-        bypassing the queue. This means it does NOT wait for previously queued
-        tasks to finish.
+        def on_success(result):
+            self._emit_result(result, coro_func, callback)
 
-        :param coro_func: The coroutine object to execute.
-        :param callback: An optional callback to call with the result.
-        """
-        if not self.loop_started.is_set():
-            logging.debug("Event loop not ready yet.")
-            self.loop_started.wait()  # Block until the event loop is ready
+        def on_error(exc_info):
+            self._emit_error(exc_info, coro_func, callback)
 
-        def schedule():
-            async def runner():
-                try:
-                    # Await the coroutine object
-                    result = await coro_func
-                    # Emit the result via signal
-                    self.result_ready.emit(result, coro_func, callback)
-                except Exception as e:
-                    # Emit the exception via signal
-                    self.result_ready.emit(e, coro_func, callback)
-
-            # Ensure the coroutine is wrapped in a task
-            asyncio.ensure_future(runner(), loop=self.loop)
-
-        # Thread-safe scheduling
-        self.loop.call_soon_threadsafe(schedule)
+        logger.debug("Run coroutine in parallel: %s", coro_func)
+        self._loop.run_task(
+            coro_func,
+            on_success=on_success,
+            on_error=on_error,
+            multiple_strategy=MultipleStrategy.RUN_INDEPENDENT,
+        )
 
     def run_coroutine_blocking(self, coro: Coroutine[Any, Any, T]) -> T:
-        """
-        Run a coroutine *synchronously* in a fresh event loop.
-        This blocks the caller until the coroutine completes,
-        then returns the coroutine's result or raises its exception.
+        """Run a coroutine synchronously and return its result."""
 
-        :param coro: The coroutine object to execute.
-        :return: The result of the coroutine.
-        """
-
-        # Use run_coroutine_threadsafe to submit the coroutine to the running loop
-        if not self.loop_started.is_set():
-            self.loop_started.wait()
-        future = asyncio.run_coroutine_threadsafe(coro, self.loop)
-
-        # Wait for the coroutine to complete and return its result
-        return future.result()  # Blocks until the coroutine completes or raises an exception
+        logger.debug("Run coroutine blocking: %s", coro)
+        return self._loop.run_foreground(coro)

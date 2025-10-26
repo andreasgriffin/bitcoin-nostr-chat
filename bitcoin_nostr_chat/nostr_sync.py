@@ -135,7 +135,7 @@ class BaseNostrSync(QObject):
         # and therefore dismised the message.
         # Here we resubscribe, to get all the messages again
         self.group_chat.dm_connection.queue_coroutine(
-            self.group_chat.dm_connection.async_dm_connection.notification_handler.replay_untrusted_events
+            self.group_chat.dm_connection.async_dm_connection.notification_handler.replay_untrusted_events()
         )
 
     def close(self):

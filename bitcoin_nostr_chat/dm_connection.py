@@ -30,6 +30,7 @@ import logging
 from collections import deque
 from collections.abc import Callable
 from datetime import datetime
+from typing import Any, Coroutine
 
 import bdkpython as bdk
 from bitcoin_qr_tools.data import DataType
@@ -37,7 +38,7 @@ from nostr_sdk import EventId, Keys, PublicKey
 from PyQt6.QtCore import QObject, pyqtBoundSignal
 
 from bitcoin_nostr_chat.async_dm_connection import AsyncDmConnection
-from bitcoin_nostr_chat.async_thread import AsyncThread
+from bitcoin_nostr_chat.async_thread import AsyncThread, T
 from bitcoin_nostr_chat.base_dm import BaseDM
 from bitcoin_nostr_chat.chat_dm import ChatDM
 from bitcoin_nostr_chat.relay_list import RelayList
@@ -160,7 +161,7 @@ class DmConnection(QObject):
         self.async_thread.stop()
         self.async_dm_connection.close()
 
-    def queue_coroutine(self, coro, on_done: Callable[[], None] | None = None):
+    def queue_coroutine(self, coro: Coroutine[Any, Any, T], on_done: Callable[[], None] | None = None):
         self.async_thread.queue_coroutine(coro, on_done=on_done)
 
     def run_blocking(self, coro):
