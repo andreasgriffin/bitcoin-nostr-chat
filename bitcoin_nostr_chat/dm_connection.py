@@ -136,14 +136,19 @@ class DmConnection(QObject):
             last_updated=datetime.now(),
         )
 
-    def unsubscribe_all(self, on_done: Callable[[], None] | None = None):
-        self.async_thread.queue_coroutine(self.async_dm_connection.unsubscribe_all(), on_done=on_done)
+    def unsubscribe_all(
+        self,
+    ):
+        self.async_thread._loop.run_background(self.async_dm_connection.unsubscribe_all())
 
     def subscribe(self, start_time: datetime | None = None, on_done: Callable[[str], None] | None = None):
         self.async_thread.queue_coroutine(self.async_dm_connection.subscribe(start_time), on_done=on_done)
 
-    def unsubscribe(self, public_keys: list[PublicKey], on_done: Callable[[], None] | None = None):
-        self.async_thread.queue_coroutine(self.async_dm_connection.unsubscribe(public_keys), on_done=on_done)
+    def unsubscribe(
+        self,
+        public_keys: list[PublicKey],
+    ):
+        self.async_thread._loop.run_background(self.async_dm_connection.unsubscribe(public_keys))
 
     def replay_events_from_dump(self, on_done: Callable[[], None] | None = None):
         self.async_thread.queue_coroutine(self.async_dm_connection.replay_events_from_dump(), on_done=on_done)
