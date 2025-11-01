@@ -29,10 +29,11 @@
 
 import logging
 from datetime import datetime
+from typing import cast
 
 import bdkpython as bdk
 from bitcoin_qr_tools.data import Data, DataType
-from bitcoin_safe_lib.gui.qt.signal_tracker import SignalTracker
+from bitcoin_safe_lib.gui.qt.signal_tracker import SignalProtocol, SignalTracker
 from nostr_sdk import PublicKey
 from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox
@@ -51,9 +52,9 @@ logger = logging.getLogger(__name__)
 
 
 class BaseChat(QObject):
-    signal_attachement_clicked = pyqtSignal(FileObject)
-    signal_add_dm_to_chat = pyqtSignal(ChatDM)
-    signal_send_dm = pyqtSignal(ChatDM)
+    signal_attachement_clicked = cast(SignalProtocol[[FileObject]], pyqtSignal(FileObject))
+    signal_add_dm_to_chat = cast(SignalProtocol[[ChatDM]], pyqtSignal(ChatDM))
+    signal_send_dm = cast(SignalProtocol[[ChatDM]], pyqtSignal(ChatDM))
 
     def __init__(
         self,

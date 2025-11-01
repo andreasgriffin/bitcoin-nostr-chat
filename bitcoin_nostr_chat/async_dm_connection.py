@@ -32,9 +32,11 @@ import logging
 from collections import deque
 from collections.abc import Callable, Iterable
 from datetime import datetime
+from typing import Generic
 
 import bdkpython as bdk
 from bitcoin_qr_tools.data import DataType
+from bitcoin_safe_lib.gui.qt.signal_tracker import SignalProtocol
 from nostr_sdk import (
     Client,
     EventId,
@@ -49,10 +51,10 @@ from nostr_sdk import (
     SecretKey,
     Timestamp,
 )
-from PyQt6.QtCore import QObject, QTimer, pyqtBoundSignal
+from PyQt6.QtCore import QObject, QTimer
 
 from bitcoin_nostr_chat.annoucement_dm import AccouncementDM
-from bitcoin_nostr_chat.base_dm import BaseDM
+from bitcoin_nostr_chat.base_dm import BaseDM, T_BaseDM
 from bitcoin_nostr_chat.chat_dm import ChatDM
 from bitcoin_nostr_chat.notification_handler import (
     DM_KIND,
@@ -65,15 +67,15 @@ from bitcoin_nostr_chat.utils import filtered_for_init
 logger = logging.getLogger(__name__)
 
 
-class AsyncDmConnection(QObject):
+class AsyncDmConnection(QObject, Generic[T_BaseDM]):
     def __init__(
         self,
-        signal_dm: pyqtBoundSignal,
-        from_serialized: Callable[[str], BaseDM],
+        signal_dm: SignalProtocol[[T_BaseDM]],
+        from_serialized: Callable[[str], T_BaseDM],
         keys: Keys,
         get_currently_allowed: Callable[[], set[str]],
         use_timer: bool = False,
-        dms_from_dump: Iterable[BaseDM] | None = None,
+        dms_from_dump: Iterable[T_BaseDM] | None = None,
         relay_list: RelayList | None = None,
     ) -> None:
         super().__init__()
@@ -147,7 +149,7 @@ class AsyncDmConnection(QObject):
         ]
         return connected_relays
 
-    async def send(self, dm: BaseDM, receiver: PublicKey) -> EventId | None:
+    async def send(self, dm: T_BaseDM, receiver: PublicKey) -> EventId | None:
         await self.ensure_connected_to_relays()
         try:
             serialized_dm = dm.serialize()
@@ -243,7 +245,7 @@ class AsyncDmConnection(QObject):
         self,
         forbidden_data_types: list[DataType] | None = None,
     ):
-        def include_item(item: BaseDM) -> bool:
+        def include_item(item: T_BaseDM) -> bool:
             if isinstance(item, ChatDM):
                 if forbidden_data_types is not None:
                     if item.data and item.data.data_type in forbidden_data_types:
@@ -271,8 +273,8 @@ class AsyncDmConnection(QObject):
     def from_dump(
         cls,
         d: dict,
-        signal_dm: pyqtBoundSignal,
-        from_serialized: Callable[[str], BaseDM],
+        signal_dm: SignalProtocol[[T_BaseDM]],
+        from_serialized: Callable[[str], T_BaseDM],
         get_currently_allowed: Callable[[], set[str]],
         network: bdk.Network,
     ) -> "AsyncDmConnection":

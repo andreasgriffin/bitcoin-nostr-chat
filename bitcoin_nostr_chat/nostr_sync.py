@@ -29,11 +29,11 @@
 
 import logging
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 import bdkpython as bdk
 from bitcoin_qr_tools.data import Data, DataType
-from bitcoin_safe_lib.gui.qt.signal_tracker import SignalTracker
+from bitcoin_safe_lib.gui.qt.signal_tracker import SignalProtocol, SignalTracker
 from nostr_sdk import Keys, PublicKey, SecretKey
 from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox
@@ -82,10 +82,10 @@ def file_to_str(file_path: str):
 
 
 class BaseNostrSync(QObject):
-    signal_set_alias = pyqtSignal(str, str)
-    signal_remove_trusted_device = pyqtSignal(str)
-    signal_add_trusted_device = pyqtSignal(str)
-    signal_trusted_device_published_trust_me_back = pyqtSignal(str)
+    signal_set_alias = cast(SignalProtocol[[str, str]], pyqtSignal(str, str))
+    signal_remove_trusted_device = cast(SignalProtocol[[str]], pyqtSignal(str))
+    signal_add_trusted_device = cast(SignalProtocol[[str]], pyqtSignal(str))
+    signal_trusted_device_published_trust_me_back = cast(SignalProtocol[[str]], pyqtSignal(str))
 
     def __init__(
         self,

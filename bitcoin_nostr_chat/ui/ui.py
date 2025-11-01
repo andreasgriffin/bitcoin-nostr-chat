@@ -29,10 +29,11 @@
 
 import logging
 from collections.abc import Callable
-from typing import Optional
+from typing import cast
 
+from bitcoin_safe_lib.gui.qt.signal_tracker import SignalProtocol
 from nostr_sdk import Keys
-from PyQt6 import QtCore, QtGui, QtWidgets
+from PyQt6 import QtWidgets
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QCloseEvent
 from PyQt6.QtWidgets import (
@@ -101,10 +102,10 @@ class RelayDialog(QDialog):
 
 
 class UI(QtWidgets.QWidget):
-    signal_set_keys = QtCore.pyqtSignal()
-    signal_reset_keys = QtCore.pyqtSignal()
-    signal_set_relays = QtCore.pyqtSignal(RelayList)
-    signal_close_event = QtCore.pyqtSignal()
+    signal_set_keys = cast(SignalProtocol[[]], pyqtSignal())
+    signal_reset_keys = cast(SignalProtocol[[]], pyqtSignal())
+    signal_set_relays = cast(SignalProtocol[[RelayList]], pyqtSignal(RelayList))
+    signal_close_event = cast(SignalProtocol[[]], pyqtSignal())
 
     def __init__(
         self,
@@ -221,6 +222,6 @@ class UI(QtWidgets.QWidget):
         self.my_keys = my_keys
         self.updateUi()
 
-    def closeEvent(self, a0: Optional[QCloseEvent]) -> None:
+    def closeEvent(self, a0: QCloseEvent | None) -> None:
         self.signal_close_event.emit()
         super().closeEvent(a0)

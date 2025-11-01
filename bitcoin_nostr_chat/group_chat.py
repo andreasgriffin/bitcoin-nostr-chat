@@ -29,9 +29,11 @@ import logging
 from abc import abstractmethod
 from datetime import datetime, timedelta
 from functools import partial
+from typing import cast
 
 import bdkpython as bdk
 from bitcoin_qr_tools.data import DataType
+from bitcoin_safe_lib.gui.qt.signal_tracker import SignalProtocol
 from nostr_sdk import EventId, Keys, PublicKey
 from PyQt6.QtCore import QObject, pyqtSignal
 
@@ -47,7 +49,7 @@ logger = logging.getLogger(__name__)
 
 
 class BaseProtocol(QObject):
-    signal_dm = pyqtSignal(BaseDM)
+    signal_dm = cast(SignalProtocol[[BaseDM]], pyqtSignal(BaseDM))
 
     def __init__(
         self,
@@ -74,7 +76,7 @@ class BaseProtocol(QObject):
             )
         elif keys:
             self.dm_connection = DmConnection(
-                self.signal_dm,
+                signal_dm=self.signal_dm,
                 from_serialized=self.from_serialized,
                 keys=keys,
                 get_currently_allowed=self.get_currently_allowed,
@@ -126,7 +128,7 @@ class BaseProtocol(QObject):
 
 
 class NostrProtocol(BaseProtocol):
-    signal_dm = pyqtSignal(AccouncementDM)
+    signal_dm = cast(SignalProtocol[[AccouncementDM]], pyqtSignal(AccouncementDM))
 
     def __init__(
         self,
@@ -207,7 +209,7 @@ class NostrProtocol(BaseProtocol):
 
 
 class GroupChat(BaseProtocol):
-    signal_dm = pyqtSignal(ChatDM)
+    signal_dm = cast(SignalProtocol[[ChatDM]], pyqtSignal(ChatDM))
 
     def __init__(
         self,

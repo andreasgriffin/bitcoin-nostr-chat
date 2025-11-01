@@ -28,11 +28,13 @@
 
 
 import logging
+from typing import cast
 
+from bitcoin_safe_lib.gui.qt.signal_tracker import SignalProtocol
 from PyQt6.QtCore import QObject, pyqtSignal
 
 logger = logging.getLogger(__name__)
 
 
 class SignalsMin(QObject):
-    language_switch = pyqtSignal()
+    language_switch = cast(SignalProtocol[[]], pyqtSignal())

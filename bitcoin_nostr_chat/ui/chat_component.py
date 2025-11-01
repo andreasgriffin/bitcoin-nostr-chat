@@ -30,9 +30,10 @@
 import os
 import sys
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import cast
 
 from bitcoin_qr_tools.data import Data
+from bitcoin_safe_lib.gui.qt.signal_tracker import SignalProtocol
 from bitcoin_safe_lib.util import insert_invisible_spaces_for_wordwrap
 from PyQt6.QtCore import QPoint, Qt, pyqtSignal
 from PyQt6.QtGui import QIcon, QKeyEvent
@@ -77,7 +78,7 @@ class ChatListWidget(QListWidget):
     ROLE_SORT: int = 1001
     ROLE_CLIPBOARD: int = 1002
 
-    signal_clear = pyqtSignal()
+    signal_clear = cast(SignalProtocol[[]], pyqtSignal())
 
     def __init__(
         self,
@@ -87,7 +88,7 @@ class ChatListWidget(QListWidget):
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.show_context_menu)
 
-    def keyPressEvent(self, e: Optional[QKeyEvent]) -> None:
+    def keyPressEvent(self, e: QKeyEvent | None) -> None:
         if not e:
             return
         # When CTRL+C is pressed, copy selected items in display order to the clipboard.
@@ -122,9 +123,9 @@ class ChatListWidget(QListWidget):
 
 class ChatComponent(QWidget):
     # Custom signals
-    itemClicked = pyqtSignal(QListWidgetItem)
+    itemClicked = cast(SignalProtocol[[QListWidgetItem]], pyqtSignal(QListWidgetItem))
     # New signal emitted when an attachment is clicked
-    signal_attachement_clicked = pyqtSignal(FileObject)
+    signal_attachement_clicked = cast(SignalProtocol[[FileObject]], pyqtSignal(FileObject))
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)

@@ -6,6 +6,8 @@ import pytest
 from nostr_sdk import Keys
 from PyQt6.QtCore import QCoreApplication, QObject, pyqtSignal
 from pytestqt.qtbot import QtBot
+from bitcoin_safe_lib.gui.qt.signal_tracker import SignalProtocol, SignalTools, SignalTracker
+from typing import cast
 
 from bitcoin_nostr_chat.default_relays import get_default_delays, get_preferred_relays
 from bitcoin_nostr_chat.group_chat import ChatDM, ChatLabel, DmConnection, RelayList
@@ -27,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 
 class DummyClass(QObject):
-    signal_dm = pyqtSignal(ChatDM)
+    signal_dm = cast(SignalProtocol[[ChatDM]], pyqtSignal(ChatDM))
 
 
 def send_dms_to_self(qtbot: QtBot, relays: list[str], raise_error: bool):
@@ -48,8 +50,8 @@ def send_dms_to_self(qtbot: QtBot, relays: list[str], raise_error: bool):
         logger.info(f"{round(i / len(relays) * 100)}%  " + "*" * 50)
         logger.info(f"relay: {relay}")
 
-        dm_connection = DmConnection(
-            test_instance_recipient.signal_dm,
+        dm_connection = DmConnection[ChatDM](
+            signal_dm=test_instance_recipient.signal_dm,
             from_serialized=from_serialized,
             keys=keys,
             get_currently_allowed=get_currently_allowed,

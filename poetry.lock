@@ -43,7 +43,7 @@ files = [
 
 [[package]]
 name = "bitcoin-qr-tools"
-version = "3.0.0"
+version = "3.0.1"
 description = "Python bitcoin qr reader and generator"
 optional = false
 python-versions = ">=3.10,<3.13"
@@ -69,11 +69,11 @@ segno = "1.6.1"
 type = "git"
 url = "https://github.com/andreasgriffin/bitcoin-qr-tools.git"
 reference = "main"
-resolved_reference = "06637207850711121b39662ecd450af89ae85ad3"
+resolved_reference = "27746420e536fb2ba48d83127fd57ca70579fb09"
 
 [[package]]
 name = "bitcoin-safe-lib"
-version = "1.0.0"
+version = "1.0.1"
 description = "Python tools and library"
 optional = false
 python-versions = ">=3.10,<3.13"
@@ -90,7 +90,7 @@ pyqt6 = "^6.9.0"
 type = "git"
 url = "https://github.com/andreasgriffin/bitcoin-safe-lib.git"
 reference = "main"
-resolved_reference = "bbbf0a617b2d70c8fbdd7f2caa97dddebb263078"
+resolved_reference = "cb4c4f912e7254551830057e7ecc3ba1b8f9589f"
 
 [[package]]
 name = "cbor2"

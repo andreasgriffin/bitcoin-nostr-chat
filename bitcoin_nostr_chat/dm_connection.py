@@ -30,32 +30,32 @@ import logging
 from collections import deque
 from collections.abc import Callable
 from datetime import datetime
-from typing import Any, Coroutine
+from typing import Any, Coroutine, Generic
 
 import bdkpython as bdk
 from bitcoin_qr_tools.data import DataType
+from bitcoin_safe_lib.gui.qt.signal_tracker import SignalProtocol
 from nostr_sdk import EventId, Keys, PublicKey
-from PyQt6.QtCore import QObject, pyqtBoundSignal
+from PyQt6.QtCore import QObject
 
 from bitcoin_nostr_chat.async_dm_connection import AsyncDmConnection
 from bitcoin_nostr_chat.async_thread import AsyncThread, T
-from bitcoin_nostr_chat.base_dm import BaseDM
-from bitcoin_nostr_chat.chat_dm import ChatDM
+from bitcoin_nostr_chat.base_dm import T_BaseDM
 from bitcoin_nostr_chat.relay_list import RelayList
 from bitcoin_nostr_chat.utils import filtered_for_init
 
 logger = logging.getLogger(__name__)
 
 
-class DmConnection(QObject):
+class DmConnection(QObject, Generic[T_BaseDM]):
     def __init__(
         self,
-        signal_dm: pyqtBoundSignal,
-        from_serialized: Callable[[str], BaseDM],
+        from_serialized: Callable[[str], T_BaseDM],
+        signal_dm: SignalProtocol[[T_BaseDM]],
         keys: Keys,
         get_currently_allowed: Callable[[], set[str]],
         use_timer: bool = False,
-        dms_from_dump: deque[ChatDM] | None = None,
+        dms_from_dump: deque[T_BaseDM] | None = None,
         relay_list: RelayList | None = None,
         async_dm_connection: AsyncDmConnection | None = None,
         parent: QObject | None = None,
@@ -92,8 +92,8 @@ class DmConnection(QObject):
     def from_dump(
         cls,
         d: dict,
-        signal_dm: pyqtBoundSignal,
-        from_serialized: Callable[[str], BaseDM],
+        signal_dm: SignalProtocol[[T_BaseDM]],
+        from_serialized: Callable[[str], T_BaseDM],
         get_currently_allowed: Callable[[], set[str]],
         network: bdk.Network,
         parent: QObject | None = None,
@@ -120,7 +120,9 @@ class DmConnection(QObject):
     ):
         return self.async_dm_connection.dump(forbidden_data_types=forbidden_data_types)
 
-    def send(self, dm: BaseDM, receiver: PublicKey, on_done: Callable[[EventId | None], None] | None = None):
+    def send(
+        self, dm: T_BaseDM, receiver: PublicKey, on_done: Callable[[EventId | None], None] | None = None
+    ):
         self.async_thread.queue_coroutine(self.async_dm_connection.send(dm, receiver), on_done=on_done)
 
     def get_connected_relays(self) -> RelayList:

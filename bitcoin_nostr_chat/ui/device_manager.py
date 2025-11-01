@@ -1,7 +1,8 @@
 import logging
 import sys
-from typing import Generic, TypeVar
+from typing import Generic, TypeVar, cast
 
+from bitcoin_safe_lib.gui.qt.signal_tracker import SignalProtocol
 from PyQt6.QtCore import QPoint, Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
     QAbstractItemView,
@@ -25,9 +26,9 @@ logger = logging.getLogger(__name__)
 
 
 class BaseDeviceItem(QWidget):
-    signal_set_alias = pyqtSignal(str, str)
-    signal_untrust_device = pyqtSignal(str)
-    signal_trust_device = pyqtSignal(str)
+    signal_set_alias = cast(SignalProtocol[[str, str]], pyqtSignal(str, str))
+    signal_untrust_device = cast(SignalProtocol[[str]], pyqtSignal(str))
+    signal_trust_device = cast(SignalProtocol[[str]], pyqtSignal(str))
 
     def __init__(self, pub_key_bech32: str, alias: str | None = None, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -169,8 +170,8 @@ T = TypeVar("T", bound=BaseDeviceItem)  # Represents the type of the result retu
 
 
 class DeviceList(QListWidget, Generic[T]):
-    signal_untrust_device = pyqtSignal(str)
-    signal_trust_device = pyqtSignal(str)
+    signal_untrust_device = cast(SignalProtocol[[str]], pyqtSignal(str))
+    signal_trust_device = cast(SignalProtocol[[str]], pyqtSignal(str))
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -187,8 +188,12 @@ class DeviceList(QListWidget, Generic[T]):
         self.setItemWidget(list_item, device_item)
 
         list_item.setSizeHint(device_item.sizeHint())
-        device_item.signal_untrust_device.connect(lambda: self.remove_list_item(list_item))
-        device_item.signal_trust_device.connect(lambda: self.remove_list_item(list_item))
+
+        def remove_item(s: str):
+            return self.remove_list_item(list_item)
+
+        device_item.signal_untrust_device.connect(remove_item)
+        device_item.signal_trust_device.connect(remove_item)
         device_item.signal_untrust_device.connect(self.signal_untrust_device)
         device_item.signal_trust_device.connect(self.signal_trust_device)
         self.updateUi()
@@ -230,7 +235,7 @@ class DeviceList(QListWidget, Generic[T]):
 
 
 class DeviceManager(QWidget):
-    signal_set_alias = pyqtSignal(str, str)
+    signal_set_alias = cast(SignalProtocol[[str, str]], pyqtSignal(str, str))
 
     def __init__(self):
         super().__init__()
