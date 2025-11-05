@@ -17,33 +17,33 @@ tests = ["PyHamcrest (>=2.0.2)", "mypy", "pytest (>=4.6)", "pytest-benchmark", "
 
 [[package]]
 name = "bdkpython"
-version = "2.0.0"
+version = "2.2.0"
 description = "The Python language bindings for the Bitcoin Development Kit"
 optional = false
-python-versions = "*"
+python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "bdkpython-2.0.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:85589109c2fd6d45a603bb28c2db299c42ca512f3f743b4361fd098fc771928f"},
-    {file = "bdkpython-2.0.0-cp310-cp310-macosx_11_0_x86_64.whl", hash = "sha256:b9b2250f3c29982d0527c2d653e2c94aff6824eae5406abf7c2a4516575f562c"},
-    {file = "bdkpython-2.0.0-cp310-cp310-manylinux_2_28_x86_64.whl", hash = "sha256:7344ca9ae0dad6f2d47d0a34c49b1c3324b2aa7c6cb9809e31a2cd7367fce86e"},
-    {file = "bdkpython-2.0.0-cp310-cp310-win_amd64.whl", hash = "sha256:1f1113be576dcffddaafd26b500eed805bee95397c32c19a7bcf34b75d4a5b57"},
-    {file = "bdkpython-2.0.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:a2de453fc0fcdec4492cb768bc5157b6f046d8b1b5f2a464dcf87b36898f2fd0"},
-    {file = "bdkpython-2.0.0-cp311-cp311-macosx_11_0_x86_64.whl", hash = "sha256:cef53d02d6c9dc54ba931dd797461996e37926e17b276bf17a1d65473de075f0"},
-    {file = "bdkpython-2.0.0-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:6be01ba1db861cb982040509a64111d3f3517f93a21f93230d9652184d88d752"},
-    {file = "bdkpython-2.0.0-cp311-cp311-win_amd64.whl", hash = "sha256:e4000ae25a614568d6551a2b07864c4efe83c2529e407acece6a6e8b5b8ca417"},
-    {file = "bdkpython-2.0.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:ea4113cb957d747183e4dd7516d688d4cb17d9d064ab58bc0412d3d378b3abbf"},
-    {file = "bdkpython-2.0.0-cp312-cp312-macosx_11_0_x86_64.whl", hash = "sha256:ddb461048c5a9714aff0858b988952efea114630b0757b7483d0341448042c2b"},
-    {file = "bdkpython-2.0.0-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:f4be77e2ef8cc1b53ab8357afad023055a063c98447ad73964e39da2dbdb2c86"},
-    {file = "bdkpython-2.0.0-cp312-cp312-win_amd64.whl", hash = "sha256:a311d7a76be7dea50f69349f2649dbfce142e4a7302dc8747c6f1a313cb19c48"},
-    {file = "bdkpython-2.0.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:17bc0a170dffd3106291176e0be37d974296868b4d2b45f163ef9f626332afe5"},
-    {file = "bdkpython-2.0.0-cp313-cp313-macosx_11_0_x86_64.whl", hash = "sha256:d484660eac248cba7f06bde924deff54c545feb95dde372a3fc80f943f526927"},
-    {file = "bdkpython-2.0.0-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:7eaa1b83c335c66c2622b1b9892f144dceb9f3feeac5b4f48299baa744a42d62"},
-    {file = "bdkpython-2.0.0-cp313-cp313-win_amd64.whl", hash = "sha256:b49cce09fb241bf7bef642c1d88a5603120ef447011131610af73a439359f49e"},
+    {file = "bdkpython-2.2.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:7676b4d81fb7ede6244751f9f5fb3acdcece00b4f7a4850d819f6a9f0124e2ea"},
+    {file = "bdkpython-2.2.0-cp310-cp310-macosx_11_0_x86_64.whl", hash = "sha256:867b9451195ca9c52a960d986c36c6056ca915a462957e6d2911635d70754de2"},
+    {file = "bdkpython-2.2.0-cp310-cp310-manylinux_2_28_x86_64.whl", hash = "sha256:9edf70c4a47191d2a76cafa5df2dbb56be57e6e515d983ba7666745f95a70f4a"},
+    {file = "bdkpython-2.2.0-cp310-cp310-win_amd64.whl", hash = "sha256:52f1be0334fc4d5141be00f221efab939da2797630a6b75a724cc9862b6db353"},
+    {file = "bdkpython-2.2.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:13ca2e18036418cb98341afc13dab5818dd9a40dce5557179a71c6bff2192893"},
+    {file = "bdkpython-2.2.0-cp311-cp311-macosx_11_0_x86_64.whl", hash = "sha256:053810ba60e9c5a9619c96b64eda4f784ef771b76bf59e07e666da89467d3bc7"},
+    {file = "bdkpython-2.2.0-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:c37a7fc35ec1a21fe20cb9ddc2390e6bc1c4c10cc5f2025bd7ab700018990eb3"},
+    {file = "bdkpython-2.2.0-cp311-cp311-win_amd64.whl", hash = "sha256:83f05a7b5d21c2df7c3cdc617ac55e722190b1c6f61f85294f09f25411fd587e"},
+    {file = "bdkpython-2.2.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:8f5ae5ad35910714e2e7005ea3f4119f3a1697998ecf2245e1bfaaf0c002e0cb"},
+    {file = "bdkpython-2.2.0-cp312-cp312-macosx_11_0_x86_64.whl", hash = "sha256:582fd94fa41b60794b3200a72a5b3c0a5e4d5f7c6ed8bd8193f2eeafbe3a3638"},
+    {file = "bdkpython-2.2.0-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:f7e70444c3cc1b6e26347bc62c17b9008e738d86935f25825a63456d965c7a97"},
+    {file = "bdkpython-2.2.0-cp312-cp312-win_amd64.whl", hash = "sha256:a7b770c38d55ac9c434538ee48f8e8f276ef6625ea4822598b48a72314f52441"},
+    {file = "bdkpython-2.2.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:be730cef7f7008a1b86a52feab306a65667cc11c0972bd2596dd808f1da6db6e"},
+    {file = "bdkpython-2.2.0-cp313-cp313-macosx_11_0_x86_64.whl", hash = "sha256:1b0ea06552e380884a9bb43d5d7f23f6c7532997134e6c2bccb98196c065d316"},
+    {file = "bdkpython-2.2.0-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:24ca0b94f4b40813802ce68c2fb2a5e1a47828d8531ee91059fec90c096d0ba5"},
+    {file = "bdkpython-2.2.0-cp313-cp313-win_amd64.whl", hash = "sha256:225fd1ead7688d2f2b42d684dc3d8344679299dfe7ba01bd6a27f84d47d42858"},
 ]
 
 [[package]]
 name = "bitcoin-qr-tools"
-version = "2.1.1"
+version = "3.0.0"
 description = "Python bitcoin qr reader and generator"
 optional = false
 python-versions = ">=3.10,<3.13"
@@ -68,8 +68,8 @@ segno = "1.6.1"
 [package.source]
 type = "git"
 url = "https://github.com/andreasgriffin/bitcoin-qr-tools.git"
-reference = "bdk2.x"
-resolved_reference = "59758d8e9628c530d197f7daa9c1cdce52fd35ae"
+reference = "main"
+resolved_reference = "06637207850711121b39662ecd450af89ae85ad3"
 
 [[package]]
 name = "bitcoin-safe-lib"
@@ -89,8 +89,8 @@ pyqt6 = "^6.9.0"
 [package.source]
 type = "git"
 url = "https://github.com/andreasgriffin/bitcoin-safe-lib.git"
-reference = "bdk2.x"
-resolved_reference = "1cced926d0a2baeaa2b8a35df86d826bffd6a400"
+reference = "main"
+resolved_reference = "bbbf0a617b2d70c8fbdd7f2caa97dddebb263078"
 
 [[package]]
 name = "cbor2"
@@ -1444,4 +1444,4 @@ test = ["pytest", "websockets"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.13"
-content-hash = "8b1478974703eb317236d372605a6a1421077d241e476e14c9579838ff357688"
+content-hash = "12c3b8868e1574585ab6e6f748b371adb9ed7d97c2b33027f92be8d68db9ee52"
