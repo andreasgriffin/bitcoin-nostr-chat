@@ -31,6 +31,7 @@ import logging
 import os
 import sys
 from datetime import datetime
+from typing import Optional
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QBrush, QColor, QResizeEvent
@@ -131,7 +132,7 @@ class ChatGui(QWidget):
 
         self._layout.addLayout(self.dynamicLayout)
 
-    def resizeEvent(self, a0: QResizeEvent | None) -> None:
+    def resizeEvent(self, a0: Optional[QResizeEvent]) -> None:
         self.updateDynamicLayout()
         super().resizeEvent(a0)
 

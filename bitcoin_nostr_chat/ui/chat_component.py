@@ -30,6 +30,7 @@
 import os
 import sys
 from datetime import datetime, timedelta
+from typing import Optional
 
 from bitcoin_qr_tools.data import Data
 from bitcoin_safe_lib.util import insert_invisible_spaces_for_wordwrap
@@ -86,7 +87,7 @@ class ChatListWidget(QListWidget):
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.show_context_menu)
 
-    def keyPressEvent(self, e: QKeyEvent | None) -> None:
+    def keyPressEvent(self, e: Optional[QKeyEvent]) -> None:
         if not e:
             return
         # When CTRL+C is pressed, copy selected items in display order to the clipboard.

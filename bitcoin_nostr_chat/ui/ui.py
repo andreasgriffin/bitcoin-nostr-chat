@@ -29,10 +29,12 @@
 
 import logging
 from collections.abc import Callable
+from typing import Optional
 
 from nostr_sdk import Keys
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QCloseEvent
 from PyQt6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -219,6 +221,6 @@ class UI(QtWidgets.QWidget):
         self.my_keys = my_keys
         self.updateUi()
 
-    def closeEvent(self, a0: QtGui.QCloseEvent | None) -> None:
+    def closeEvent(self, a0: Optional[QCloseEvent]) -> None:
         self.signal_close_event.emit()
         super().closeEvent(a0)
