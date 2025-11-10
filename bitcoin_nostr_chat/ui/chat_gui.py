@@ -31,8 +31,9 @@ import logging
 import os
 import sys
 from datetime import datetime
-from typing import Optional
+from typing import cast
 
+from bitcoin_safe_lib.gui.qt.signal_tracker import SignalProtocol
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QBrush, QColor, QResizeEvent
 from PyQt6.QtWidgets import (
@@ -57,8 +58,10 @@ logger = logging.getLogger(__name__)
 
 class ChatGui(QWidget):
     # signal_set_relay_list = pyqtSignal(ChatDataRelayList)
-    signal_on_message_send = pyqtSignal(str)
-    signal_share_filecontent = pyqtSignal(str, str)  # file_content, filename
+    signal_on_message_send = cast(SignalProtocol[[str]], pyqtSignal(str))
+    signal_share_filecontent = cast(
+        SignalProtocol[[str, str]], pyqtSignal(str, str)
+    )  # file_content, filename
 
     def __init__(self, signals_min: SignalsMin):
         super().__init__()
@@ -132,7 +135,7 @@ class ChatGui(QWidget):
 
         self._layout.addLayout(self.dynamicLayout)
 
-    def resizeEvent(self, a0: Optional[QResizeEvent]) -> None:
+    def resizeEvent(self, a0: QResizeEvent | None) -> None:
         self.updateDynamicLayout()
         super().resizeEvent(a0)
 

@@ -29,10 +29,10 @@
 import logging
 from collections import deque
 from collections.abc import Callable, Iterable
-from typing import Any
+from typing import Any, Generic
 
 import requests
-from bitcoin_safe_lib.gui.qt.signal_tracker import SignalTracker
+from bitcoin_safe_lib.gui.qt.signal_tracker import SignalProtocol, SignalTracker
 from nostr_sdk import (
     Event,
     HandleNotification,
@@ -44,9 +44,8 @@ from nostr_sdk import (
     UnsignedEvent,
     UnwrappedGift,
 )
-from PyQt6.QtCore import pyqtBoundSignal
 
-from bitcoin_nostr_chat.base_dm import BaseDM
+from bitcoin_nostr_chat.base_dm import BaseDM, T_BaseDM
 
 logger = logging.getLogger(__name__)
 
@@ -84,18 +83,18 @@ class PrintHandler(HandleNotification):
         logger.debug(f"{self.name}: Received new {event.kind()} event from {relay_url}:   {event.as_json()}")
 
 
-class NotificationHandler(HandleNotification):
+class NotificationHandler(HandleNotification, Generic[T_BaseDM]):
     def __init__(
         self,
         my_keys: Keys,
         get_currently_allowed: Callable[[], set[str]],
-        processed_dms: deque[BaseDM],
-        signal_dm: pyqtBoundSignal,
-        from_serialized: Callable[[str], BaseDM],
+        processed_dms: deque[T_BaseDM],
+        signal_dm: SignalProtocol[[T_BaseDM]],
+        from_serialized: Callable[[str], T_BaseDM],
     ) -> None:
         super().__init__()
         self.signal_tracker = SignalTracker()
-        self.processed_dms: deque[BaseDM] = processed_dms
+        self.processed_dms: deque[T_BaseDM] = processed_dms
         self.untrusted_events: deque[Event] = deque(maxlen=10000)
         self.get_currently_allowed = get_currently_allowed
         self.my_keys = my_keys
@@ -160,7 +159,7 @@ class NotificationHandler(HandleNotification):
                 logger.debug(f"Error during content NIP59 decryption: {e}")
 
     def handle_trusted_dm_for_me(self, event: Event, author: PublicKey, base85_encoded_data: str):
-        nostr_dm: BaseDM = self.from_serialized(base85_encoded_data)
+        nostr_dm: T_BaseDM = self.from_serialized(base85_encoded_data)
         nostr_dm.event = event
         nostr_dm.author = author
 
@@ -172,20 +171,20 @@ class NotificationHandler(HandleNotification):
 
         logger.debug(f"Processed dm of {event.id().to_bech32()=}")
 
-    def emit_signal_dm(self, dm: BaseDM):
+    def emit_signal_dm(self, dm: T_BaseDM):
         # ensure that this is not reprocessed again
         self.add_to_processed_dms(dm)
         self.signal_dm.emit(dm)
 
-    def add_to_processed_dms(self, dm: BaseDM):
+    def add_to_processed_dms(self, dm: T_BaseDM):
         if self.dm_is_alreay_processed(dm):
             return
         self.processed_dms.append(dm)
 
-    def on_signal_dm(self, dm: BaseDM):
+    def on_signal_dm(self, dm: T_BaseDM):
         self.add_to_processed_dms(dm)
 
-    def dm_is_alreay_processed(self, dm: BaseDM) -> bool:
+    def dm_is_alreay_processed(self, dm: T_BaseDM) -> bool:
         for item in list(self.processed_dms):
             if not isinstance(item, BaseDM):
                 continue  # type: ignore

@@ -32,6 +32,7 @@ import json
 import logging
 import zlib
 from datetime import datetime, timedelta
+from typing import TypeVar
 
 import bdkpython as bdk
 import cbor2
@@ -137,3 +138,6 @@ class BaseDM:
                 return False
             return True
         return False
+
+
+T_BaseDM = TypeVar("T_BaseDM", bound=BaseDM)
