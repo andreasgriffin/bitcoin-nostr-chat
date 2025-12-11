@@ -38,6 +38,7 @@ from bitcoin_safe_lib.util import insert_invisible_spaces_for_wordwrap
 from PyQt6.QtCore import QPoint, Qt, pyqtSignal
 from PyQt6.QtGui import QIcon, QKeyEvent
 from PyQt6.QtWidgets import (
+    QAbstractItemView,
     QApplication,
     QHBoxLayout,
     QLabel,
@@ -161,6 +162,7 @@ class ChatComponent(QWidget):
         if icon is not None:
             item.setIcon(icon)
         self.list_widget.addItem(item)
+        self.scroll_to_item(item)
         return item
         # No need to call sortItems() explicitly since sorting is enabled.
 
@@ -180,6 +182,7 @@ class ChatComponent(QWidget):
         item.setSizeHint(widget.sizeHint())
         self.list_widget.addItem(item)
         self.list_widget.setItemWidget(item, widget)
+        self.scroll_to_item(item)
         return item
 
     def add_file(
@@ -199,7 +202,7 @@ class ChatComponent(QWidget):
         """
         Scrolls the view so that the specified item is visible.
         """
-        self.list_widget.scrollToItem(item)
+        self.list_widget.scrollToItem(item, QAbstractItemView.ScrollHint.PositionAtBottom)
 
     def clearItems(self) -> None:
         """
