@@ -68,7 +68,9 @@ class DemoApp(QMainWindow):
 
         d = load_dict_from_file(file_name)
         if d:
-            self.nostr_sync = NostrSyncWithSingleChats.from_dump(d, signals_min=signals_min)
+            self.nostr_sync = NostrSyncWithSingleChats.from_dump(
+                d, signals_min=signals_min, loop_in_thread=None
+            )
         else:
             keys = Keys(
                 secret_key=SecretKey.parse(hashlib.sha256(protcol_secret_str.encode("utf-8")).hexdigest())
@@ -80,6 +82,7 @@ class DemoApp(QMainWindow):
                 device_keys=Keys.generate(),
                 signals_min=signals_min,
                 use_compression=use_compression,
+                loop_in_thread=None,
             )
         self.nostr_sync.subscribe()
         self.setCentralWidget(self.nostr_sync.ui)

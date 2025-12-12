@@ -100,6 +100,7 @@ class NotificationHandler(HandleNotification, Generic[T_BaseDM]):
         self.my_keys = my_keys
         self.signal_dm = signal_dm
         self.from_serialized = from_serialized
+        self.signer = NostrSigner.keys(self.my_keys)
         self.signal_tracker.connect(signal_dm, self.on_signal_dm)
 
     def is_allowed_message(self, recipient_public_key: PublicKey, author: PublicKey) -> bool:
@@ -133,9 +134,7 @@ class NotificationHandler(HandleNotification, Generic[T_BaseDM]):
                 # from_gift_wrap verifies the seal (encryption) was done correctly
                 # from_gift_wrap should fail, if it is not
                 # encrypted with my public key (so it is guaranteed to be for me)
-                unwrapped_gift: UnwrappedGift = await UnwrappedGift.from_gift_wrap(
-                    NostrSigner.keys(self.my_keys), event
-                )
+                unwrapped_gift: UnwrappedGift = await UnwrappedGift.from_gift_wrap(self.signer, event)
                 sender = unwrapped_gift.sender()
 
                 recipient_public_key = event.tags().public_keys()[0]

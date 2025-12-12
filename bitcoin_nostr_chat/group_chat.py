@@ -28,13 +28,13 @@
 import logging
 from abc import abstractmethod
 from datetime import datetime, timedelta
-from functools import partial
 from typing import cast
 
 import bdkpython as bdk
 from bitcoin_qr_tools.data import DataType
+from bitcoin_safe_lib.async_tools.loop_in_thread import LoopInThread
 from bitcoin_safe_lib.gui.qt.signal_tracker import SignalProtocol
-from nostr_sdk import EventId, Keys, PublicKey
+from nostr_sdk import Keys, PublicKey
 from PyQt6.QtCore import QObject, pyqtSignal
 
 from bitcoin_nostr_chat import DEFAULT_USE_COMPRESSION
@@ -55,6 +55,7 @@ class BaseProtocol(QObject):
         self,
         sync_start: datetime | None,
         network: bdk.Network,
+        loop_in_thread: LoopInThread | None,
         keys: Keys | None = None,
         dm_connection_dump: dict | None = None,
         parent: QObject | None = None,
@@ -64,6 +65,7 @@ class BaseProtocol(QObject):
         # start_time saves the last shutdown time
         self.sync_start = sync_start
         self.network = network
+        self.loop_in_thread = loop_in_thread
 
         if dm_connection_dump:
             self.dm_connection = DmConnection.from_dump(
@@ -72,6 +74,7 @@ class BaseProtocol(QObject):
                 from_serialized=self.from_serialized,
                 get_currently_allowed=self.get_currently_allowed,
                 network=network,
+                loop_in_thread=self.loop_in_thread,
                 parent=self,
             )
         elif keys:
@@ -80,6 +83,7 @@ class BaseProtocol(QObject):
                 from_serialized=self.from_serialized,
                 keys=keys,
                 get_currently_allowed=self.get_currently_allowed,
+                loop_in_thread=self.loop_in_thread,
                 parent=self,
             )
         else:
@@ -113,7 +117,6 @@ class BaseProtocol(QObject):
         self.dm_connection.async_dm_connection.create_clients(
             keys, processed_dms=self.dm_connection.async_dm_connection.notification_handler.processed_dms
         )
-        self.dm_connection.connect_clients()
         self.subscribe()
 
     def set_relay_list(self, relay_list: RelayList):
@@ -134,6 +137,7 @@ class NostrProtocol(BaseProtocol):
         self,
         network: bdk.Network,
         sync_start: datetime | None,
+        loop_in_thread: LoopInThread | None,
         keys: Keys | None = None,
         dm_connection_dump: dict | None = None,
         use_compression=DEFAULT_USE_COMPRESSION,
@@ -146,6 +150,7 @@ class NostrProtocol(BaseProtocol):
             sync_start=sync_start,
             parent=parent,
             network=network,
+            loop_in_thread=loop_in_thread,
         )
         self.use_compression = use_compression
 
@@ -199,13 +204,17 @@ class NostrProtocol(BaseProtocol):
         }
 
     @classmethod
-    def from_dump(cls, d: dict) -> "NostrProtocol":
+    def from_dump(
+        cls,
+        d: dict,
+        loop_in_thread: LoopInThread | None,
+    ) -> "NostrProtocol":
         # start_time saves the last shutdown time
         d["sync_start"] = (
             datetime.fromtimestamp(d["sync_start"]) if ("sync_start" in d) and d["sync_start"] else None
         )
         d["network"] = bdk.Network[d["network"]]
-        return cls(**filtered_for_init(d, cls))
+        return cls(**filtered_for_init(d, cls), loop_in_thread=loop_in_thread)
 
 
 class GroupChat(BaseProtocol):
@@ -215,6 +224,7 @@ class GroupChat(BaseProtocol):
         self,
         network: bdk.Network,
         sync_start: datetime | None,
+        loop_in_thread: LoopInThread | None,
         keys: Keys | None = None,
         dm_connection_dump: dict | None = None,
         members: list[PublicKey] | None = None,
@@ -235,6 +245,7 @@ class GroupChat(BaseProtocol):
             sync_start=sync_start,
             parent=parent,
             network=network,
+            loop_in_thread=loop_in_thread,
         )
 
     def get_currently_allowed(self) -> set[str]:
@@ -257,29 +268,13 @@ class GroupChat(BaseProtocol):
             self.dm_connection.unsubscribe([remove_member])
             logger.debug(f"Removed {remove_member.to_bech32()=}")
 
-    def _send_copy_to_myself(self, dm: ChatDM, receiver: PublicKey, send_to_other_event_id: EventId | None):
-        logger.debug(
-            f"Successfully sent to {receiver.to_bech32()=} ({send_to_other_event_id=})"
-            " and now send copy to myself"
-        )
-        copy_dm = ChatDM.from_dump(dm.dump(), network=self.network)
-        copy_dm.use_compression = dm.use_compression
-        copy_dm.event = None
-        self.dm_connection.send(copy_dm, receiver=self.my_public_key())
-
     def send_to(self, dm: ChatDM, recipients: list[PublicKey], send_also_to_me=True):
         for public_key in recipients:
-            on_done = None
-            if send_also_to_me and public_key == self.members[-1]:
-                # for the last recipient, make a callback to send a copy to myself
-                # such that, if the last recipient gets it, then i get a copy too
-                on_done = partial(self._send_copy_to_myself, dm, public_key)
-            self.dm_connection.send(dm, public_key, on_done=on_done)
+            self.dm_connection.send(dm, public_key)
             logger.debug(f"Send to {public_key.to_bech32()=}")
 
-        if not self.members:
-            logger.debug(f"{self.members=}, so sending to myself only")
-            self.dm_connection.send(dm, receiver=self.my_public_key())
+        if not self.members or send_also_to_me:
+            self.dm_connection.send(dm, self.my_public_key())
 
     def send(self, dm: ChatDM, send_also_to_me=True):
         self.send_to(dm=dm, recipients=self.members, send_also_to_me=send_also_to_me)
@@ -308,21 +303,25 @@ class GroupChat(BaseProtocol):
         }
 
     @classmethod
-    def from_dump(cls, d: dict) -> "GroupChat":
+    def from_dump(
+        cls,
+        d: dict,
+        loop_in_thread: LoopInThread | None,
+    ) -> "GroupChat":
         # start_time saves the last shutdown time
         d["sync_start"] = (
             datetime.fromtimestamp(d["sync_start"]) if ("sync_start" in d) and d["sync_start"] else None
         )
         d["network"] = bdk.Network[d["network"]]
         d["members"] = [PublicKey.parse(pk) for pk in d["members"]]
-        return cls(**filtered_for_init(d, cls))
+        return cls(**filtered_for_init(d, cls), loop_in_thread=loop_in_thread)
 
     def renew_own_key(self, keys: Keys | None = None):
         # send new key to memebers
         for member in self.members:
             # run this blocking such that you ensure the messages are out
             # before you reset the connection
-            self.dm_connection.async_thread.run_coroutine_blocking(
+            self.dm_connection.async_thread.queue_coroutine(
                 self.dm_connection.async_dm_connection.send(
                     ChatDM(
                         event=None,

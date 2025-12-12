@@ -56,7 +56,9 @@ def send_dms_to_self(qtbot: QtBot, relays: list[str], raise_error: bool):
             keys=keys,
             get_currently_allowed=get_currently_allowed,
             relay_list=RelayList(relays=[relay], last_updated=datetime.now(), max_age=5000),
+            loop_in_thread=None,
         )
+        dm_connection.async_thread.run_coroutine_blocking(dm_connection.async_dm_connection.connect_clients())
         dm_connection.subscribe()
         dm_connections.append(dm_connection)
         dm = ChatDM(
