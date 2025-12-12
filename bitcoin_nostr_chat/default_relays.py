@@ -4,6 +4,7 @@ def get_preferred_relays() -> list[str]:
         "wss://relay.primal.net",
         "wss://nostr.sathoarder.com",
         "wss://nostr.vulpem.com",
+        "wss://nostr.einundzwanzig.space",
         "wss://relay.damus.io",
         "wss://strfry.openhoofd.nl",
         "wss://nostr-01.yakihonne.com",

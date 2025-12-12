@@ -33,6 +33,7 @@ from typing import Any, cast
 
 import bdkpython as bdk
 from bitcoin_qr_tools.data import Data, DataType
+from bitcoin_safe_lib.async_tools.loop_in_thread import LoopInThread
 from bitcoin_safe_lib.gui.qt.signal_tracker import SignalProtocol, SignalTracker
 from nostr_sdk import Keys, PublicKey, SecretKey
 from PyQt6.QtCore import QObject, pyqtSignal
@@ -93,6 +94,7 @@ class BaseNostrSync(QObject):
         nostr_protocol: NostrProtocol,
         group_chat: GroupChat,
         signals_min: SignalsMin,
+        loop_in_thread: LoopInThread | None,
         individual_chats_visible=True,
         hide_data_types_in_chat: tuple[DataType] = (DataType.LabelsBip329,),
         debug=False,
@@ -106,6 +108,7 @@ class BaseNostrSync(QObject):
         self.hide_data_types_in_chat = hide_data_types_in_chat
         self.signals_min = signals_min
         self.signal_tracker = SignalTracker()
+        self.loop_in_thread = loop_in_thread
 
         self.ui = UI(
             my_keys=self.group_chat.dm_connection.async_dm_connection.keys,
@@ -185,6 +188,7 @@ class BaseNostrSync(QObject):
         protocol_keys: Keys,
         device_keys: Keys,
         signals_min: SignalsMin,
+        loop_in_thread: LoopInThread | None,
         individual_chats_visible=True,
         parent: QObject | None = None,
         use_compression=DEFAULT_USE_COMPRESSION,
@@ -195,9 +199,15 @@ class BaseNostrSync(QObject):
             sync_start=None,
             parent=parent,
             use_compression=use_compression,
+            loop_in_thread=loop_in_thread,
         )
         group_chat = GroupChat(
-            network=network, keys=device_keys, sync_start=None, parent=parent, use_compression=use_compression
+            network=network,
+            keys=device_keys,
+            sync_start=None,
+            parent=parent,
+            use_compression=use_compression,
+            loop_in_thread=loop_in_thread,
         )
         return cls(
             network=network,
@@ -205,6 +215,7 @@ class BaseNostrSync(QObject):
             group_chat=group_chat,
             individual_chats_visible=individual_chats_visible,
             signals_min=signals_min,
+            loop_in_thread=loop_in_thread,
             parent=parent,
         )
 
@@ -224,13 +235,19 @@ class BaseNostrSync(QObject):
         cls,
         d: dict[str, Any],
         signals_min: SignalsMin,
+        loop_in_thread: LoopInThread | None,
         parent: QObject | None = None,
     ):
-        d["nostr_protocol"] = NostrProtocol.from_dump(d["nostr_protocol"])
-        d["group_chat"] = GroupChat.from_dump(d["group_chat"])
+        d["nostr_protocol"] = NostrProtocol.from_dump(d["nostr_protocol"], loop_in_thread=loop_in_thread)
+        d["group_chat"] = GroupChat.from_dump(d["group_chat"], loop_in_thread=loop_in_thread)
         d["network"] = bdk.Network[d["network"]]
 
-        sync = cls(**filtered_for_init(d, BaseNostrSync), signals_min=signals_min, parent=parent)
+        sync = cls(
+            **filtered_for_init(d, BaseNostrSync),
+            signals_min=signals_min,
+            parent=parent,
+            loop_in_thread=loop_in_thread,
+        )
 
         # add the gui elements for the trusted members
         for member in sync.group_chat.members:
@@ -382,6 +399,7 @@ class NostrSync(BaseNostrSync):
         nostr_protocol: NostrProtocol,
         group_chat: GroupChat,
         signals_min: SignalsMin,
+        loop_in_thread: LoopInThread | None,
         individual_chats_visible=True,
         hide_data_types_in_chat: tuple[DataType] = (DataType.LabelsBip329,),
         debug=False,
@@ -395,6 +413,7 @@ class NostrSync(BaseNostrSync):
             individual_chats_visible=individual_chats_visible,
             hide_data_types_in_chat=hide_data_types_in_chat,
             debug=debug,
+            loop_in_thread=loop_in_thread,
             parent=parent,
         )
 
@@ -425,6 +444,7 @@ class NostrSyncWithSingleChats(BaseNostrSync):
         nostr_protocol: NostrProtocol,
         group_chat: GroupChat,
         signals_min: SignalsMin,
+        loop_in_thread: LoopInThread | None,
         individual_chats_visible=True,
         hide_data_types_in_chat: tuple[DataType] = (DataType.LabelsBip329,),
         debug=False,
@@ -438,6 +458,7 @@ class NostrSyncWithSingleChats(BaseNostrSync):
             individual_chats_visible=individual_chats_visible,
             hide_data_types_in_chat=hide_data_types_in_chat,
             debug=debug,
+            loop_in_thread=loop_in_thread,
             parent=parent,
         )
 

@@ -43,13 +43,19 @@ class AsyncThread(QObject):
 
     result_ready = pyqtSignal(object, object, object)  # result, coro_func, on_done
 
-    def __init__(self, parent=None):
+    def __init__(
+        self,
+        loop_in_thread: LoopInThread | None,
+        parent=None,
+    ):
         super().__init__(parent)
-        self._loop = LoopInThread()
-        self._queue_key = "async-thread-queue"
+        self.loop_in_thread = loop_in_thread if loop_in_thread else LoopInThread()
+        self._owns_loop_in_thread = loop_in_thread is None
+        # _queue_key such that it is independent of other AsyncThread int he loop
+        self._queue_key = f"AsyncThread{id(self)}"
 
     def _emit_result(self, result: object, coro: Coroutine[Any, Any, Any], callback):
-        logger.debug("Task finished: %s", coro)
+        # logger.debug("Task finished: %s", coro)
         self.result_ready.emit(result, coro, callback)
 
     def _emit_error(self, exc_info, coro: Coroutine[Any, Any, Any], callback):
@@ -59,7 +65,8 @@ class AsyncThread(QObject):
 
     def stop(self):
         """Stop the event loop (if needed) and wait for the thread to finish."""
-        self._loop.stop()
+        if self._owns_loop_in_thread:
+            self.loop_in_thread.stop()
 
     def queue_coroutine(self, coro_func: Coroutine[Any, Any, T], on_done=None):
         """Schedule a coroutine to run sequentially on the worker loop."""
@@ -70,8 +77,8 @@ class AsyncThread(QObject):
         def on_error(exc_info):
             self._emit_error(exc_info, coro_func, on_done)
 
-        logger.debug("Queue coroutine: %s", coro_func)
-        self._loop.run_task(
+        # logger.debug("Queue coroutine: %s", coro_func)
+        self.loop_in_thread.run_task(
             coro_func,
             on_success=on_success,
             on_error=on_error,
@@ -79,8 +86,26 @@ class AsyncThread(QObject):
             multiple_strategy=MultipleStrategy.QUEUE,
         )
 
+    def background(self, coro_func: Coroutine[Any, Any, T], on_done=None):
+        """Schedule a coroutine to run sequentially on the worker loop."""
+
+        def on_success(result):
+            self._emit_result(result, coro_func, on_done)
+
+        def on_error(exc_info):
+            self._emit_error(exc_info, coro_func, on_done)
+
+        # logger.debug("Queue coroutine: %s", coro_func)
+        self.loop_in_thread.run_task(
+            coro_func,
+            on_success=on_success,
+            on_error=on_error,
+            key=self._queue_key,
+            multiple_strategy=MultipleStrategy.RUN_INDEPENDENT,
+        )
+
     def run_coroutine_blocking(self, coro: Coroutine[Any, Any, T]) -> T:
         """Run a coroutine synchronously and return its result."""
 
-        logger.debug("Run coroutine blocking: %s", coro)
-        return self._loop.run_foreground(coro)
+        # logger.debug("Run coroutine blocking: %s", coro)
+        return self.loop_in_thread.run_foreground(coro)

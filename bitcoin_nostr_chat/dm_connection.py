@@ -34,8 +34,9 @@ from typing import Any, Coroutine, Generic
 
 import bdkpython as bdk
 from bitcoin_qr_tools.data import DataType
+from bitcoin_safe_lib.async_tools.loop_in_thread import LoopInThread
 from bitcoin_safe_lib.gui.qt.signal_tracker import SignalProtocol
-from nostr_sdk import EventId, Keys, PublicKey
+from nostr_sdk import EventId, Keys, PublicKey, make_private_msg
 from PyQt6.QtCore import QObject
 
 from bitcoin_nostr_chat.async_dm_connection import AsyncDmConnection
@@ -54,20 +55,24 @@ class DmConnection(QObject, Generic[T_BaseDM]):
         signal_dm: SignalProtocol[[T_BaseDM]],
         keys: Keys,
         get_currently_allowed: Callable[[], set[str]],
+        loop_in_thread: LoopInThread | None,
         use_timer: bool = False,
         dms_from_dump: deque[T_BaseDM] | None = None,
         relay_list: RelayList | None = None,
         async_dm_connection: AsyncDmConnection | None = None,
+        async_thread: AsyncThread | None = None,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent=parent)
 
-        self.async_thread = AsyncThread(parent=self)
-        self.async_thread.result_ready.connect(
-            lambda result, coro_func, callback: (
-                callback(result) if callback else (logger.debug(f"Finished {coro_func}"))
-            )
+        self.async_thread = (
+            async_thread if async_thread else AsyncThread(parent=self, loop_in_thread=loop_in_thread)
         )
+        # self.async_thread.result_ready.connect(
+        #     lambda result, coro_func, callback: (
+        #         callback(result) if callback else (logger.debug(f"Finished {coro_func}"))
+        #     )
+        # )
 
         self.async_dm_connection = (
             async_dm_connection
@@ -80,13 +85,15 @@ class DmConnection(QObject, Generic[T_BaseDM]):
                 dms_from_dump=dms_from_dump,
                 get_currently_allowed=get_currently_allowed,
                 relay_list=relay_list,
+                loop_in_thread=self.async_thread.loop_in_thread,
             )
         )
-        self.connect_clients()
 
     def connect_clients(self):
-        self.async_thread.queue_coroutine(self.async_dm_connection.ensure_connected_to_relays())
-        self.async_thread.queue_coroutine(self.async_dm_connection.connect_notification())
+        self.async_thread.queue_coroutine(self.async_dm_connection.connect_clients())
+
+    def _ensure_clients_connected(self):
+        self.connect_clients()
 
     @classmethod
     def from_dump(
@@ -96,14 +103,17 @@ class DmConnection(QObject, Generic[T_BaseDM]):
         from_serialized: Callable[[str], T_BaseDM],
         get_currently_allowed: Callable[[], set[str]],
         network: bdk.Network,
+        loop_in_thread: LoopInThread | None,
         parent: QObject | None = None,
     ) -> "DmConnection":
+        async_thread = AsyncThread(loop_in_thread=loop_in_thread)
         async_dm_connection = AsyncDmConnection.from_dump(
             d,
             signal_dm=signal_dm,
             from_serialized=from_serialized,
             get_currently_allowed=get_currently_allowed,
             network=network,
+            loop_in_thread=async_thread.loop_in_thread,
         )
 
         return cls(
@@ -112,6 +122,8 @@ class DmConnection(QObject, Generic[T_BaseDM]):
             from_serialized=from_serialized,
             async_dm_connection=async_dm_connection,
             get_currently_allowed=get_currently_allowed,
+            loop_in_thread=loop_in_thread,
+            parent=parent,
         )
 
     def dump(
@@ -120,47 +132,64 @@ class DmConnection(QObject, Generic[T_BaseDM]):
     ):
         return self.async_dm_connection.dump(forbidden_data_types=forbidden_data_types)
 
+    async def _send_to_me(
+        self,
+        dm: T_BaseDM,
+    ):
+        event = await make_private_msg(
+            signer=self.async_dm_connection.notification_handler.signer,
+            receiver=self.async_dm_connection.keys.public_key(),
+            message=dm.serialize(),
+        )
+        await self.async_dm_connection.client.send_event(event=event)
+        await self.async_dm_connection.notification_handler.handle(
+            relay_url="_inject_directly_no_relay", subscription_id="_inject_directly_no_relay", event=event
+        )
+
     def send(
         self, dm: T_BaseDM, receiver: PublicKey, on_done: Callable[[EventId | None], None] | None = None
     ):
-        self.async_thread.queue_coroutine(self.async_dm_connection.send(dm, receiver), on_done=on_done)
+        self._ensure_clients_connected()
+
+        if receiver.to_bech32() == self.async_dm_connection.keys.public_key().to_bech32():
+            # if it is sent to me
+            self.async_thread.background(self._send_to_me(dm=dm))
+        else:
+            self.async_thread.background(self.async_dm_connection.send(dm, receiver), on_done=on_done)
 
     def get_connected_relays(self) -> RelayList:
-        list_send = self.async_thread.run_coroutine_blocking(
-            self.async_dm_connection.get_connected_relays(self.async_dm_connection.client_send)
-        )
-        list_notification = self.async_thread.run_coroutine_blocking(
-            self.async_dm_connection.get_connected_relays(self.async_dm_connection.client_notification)
+        self.async_thread.run_coroutine_blocking(self.async_dm_connection.connect_clients())
+        list_relays = self.async_thread.run_coroutine_blocking(
+            self.async_dm_connection.get_connected_relays()
         )
 
         return RelayList(
-            relays=list(set([str(relay.url()) for relay in list_send + list_notification])),
-            last_updated=datetime.now(),
+            relays=list(set([str(relay.url()) for relay in list_relays])), last_updated=datetime.now()
         )
 
     def unsubscribe_all(
         self,
     ):
-        self.async_thread._loop.run_background(self.async_dm_connection.unsubscribe_all())
+        self.async_thread.loop_in_thread.run_background(self.async_dm_connection.unsubscribe_all())
 
     def subscribe(self, start_time: datetime | None = None, on_done: Callable[[str], None] | None = None):
+        self._ensure_clients_connected()
         self.async_thread.queue_coroutine(self.async_dm_connection.subscribe(start_time), on_done=on_done)
 
     def unsubscribe(
         self,
         public_keys: list[PublicKey],
     ):
-        self.async_thread._loop.run_background(self.async_dm_connection.unsubscribe(public_keys))
+        self._ensure_clients_connected()
+        self.async_thread.queue_coroutine(self.async_dm_connection.unsubscribe(public_keys))
 
     def replay_events_from_dump(self, on_done: Callable[[], None] | None = None):
+        self._ensure_clients_connected()
         self.async_thread.queue_coroutine(self.async_dm_connection.replay_events_from_dump(), on_done=on_done)
 
     def disconnect_clients(self):
         self.async_thread.queue_coroutine(
-            self.async_dm_connection.disconnect_client(self.async_dm_connection.client_send)
-        )
-        self.async_thread.queue_coroutine(
-            self.async_dm_connection.disconnect_client(self.async_dm_connection.client_notification)
+            self.async_dm_connection.disconnect_client(self.async_dm_connection.client)
         )
 
     def close(self):
