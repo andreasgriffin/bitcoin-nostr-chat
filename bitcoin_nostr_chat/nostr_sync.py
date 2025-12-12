@@ -259,14 +259,15 @@ class BaseNostrSync(QObject):
                 pub_key_bech32=pub_key_bech32, alias=sync.group_chat.aliases.get(pub_key_bech32)
             )
 
-        # restore/replay chat texts
-        sync.nostr_protocol.dm_connection.replay_events_from_dump()
-        sync.group_chat.dm_connection.replay_events_from_dump()
         return sync
 
     def subscribe(self):
         self.nostr_protocol.subscribe()
         self.group_chat.subscribe()
+
+        # restore/replay chat texts
+        self.nostr_protocol.dm_connection.replay_events_from_dump()
+        self.group_chat.dm_connection.replay_events_from_dump()
         self.publish_my_key_in_protocol()
 
     def unsubscribe(self):

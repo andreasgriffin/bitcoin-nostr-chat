@@ -180,7 +180,6 @@ class DmConnection(QObject, Generic[T_BaseDM]):
         self,
         public_keys: list[PublicKey],
     ):
-        self._ensure_clients_connected()
         self.async_thread.queue_coroutine(self.async_dm_connection.unsubscribe(public_keys))
 
     def replay_events_from_dump(self, on_done: Callable[[], None] | None = None):
