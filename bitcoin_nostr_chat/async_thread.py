@@ -28,9 +28,10 @@
 
 
 import logging
-from typing import Any, Coroutine, TypeVar
+from typing import Any, Callable, Coroutine, TypeVar, cast
 
 from bitcoin_safe_lib.async_tools.loop_in_thread import LoopInThread, MultipleStrategy
+from bitcoin_safe_lib.gui.qt.signal_tracker import SignalProtocol
 from PyQt6.QtCore import QObject, pyqtSignal
 
 logger = logging.getLogger(__name__)
@@ -41,7 +42,10 @@ T = TypeVar("T")  # Represents the type of the result returned by the coroutine
 class AsyncThread(QObject):
     """Manage an asyncio event loop on a dedicated Python thread."""
 
-    result_ready = pyqtSignal(object, object, object)  # result, coro_func, on_done
+    result_ready = cast(
+        SignalProtocol[[object, Coroutine[Any, Any, Any], Callable[[Any], None] | None]],
+        pyqtSignal(object, object, object),
+    )  # result, coro_func, on_done
 
     def __init__(
         self,
@@ -54,11 +58,11 @@ class AsyncThread(QObject):
         # _queue_key such that it is independent of other AsyncThread int he loop
         self._queue_key = f"AsyncThread{id(self)}"
 
-    def _emit_result(self, result: object, coro: Coroutine[Any, Any, Any], callback):
+    def _emit_result(self, result: T, coro: Coroutine[Any, Any, T], callback: Callable[[T], None] | None):
         # logger.debug("Task finished: %s", coro)
         self.result_ready.emit(result, coro, callback)
 
-    def _emit_error(self, exc_info, coro: Coroutine[Any, Any, Any], callback):
+    def _emit_error(self, exc_info, coro: Coroutine[Any, Any, T], callback: Callable[[T], None] | None):
         exc = exc_info[1] if exc_info and len(exc_info) > 1 else Exception("Unknown error")
         logger.debug("Task failed: %s", exc)
         self.result_ready.emit(exc, coro, callback)
@@ -68,7 +72,7 @@ class AsyncThread(QObject):
         if self._owns_loop_in_thread:
             self.loop_in_thread.stop()
 
-    def queue_coroutine(self, coro_func: Coroutine[Any, Any, T], on_done=None):
+    def queue_coroutine(self, coro_func: Coroutine[Any, Any, T], on_done: Callable[[T], None] | None = None):
         """Schedule a coroutine to run sequentially on the worker loop."""
 
         def on_success(result):
@@ -86,7 +90,7 @@ class AsyncThread(QObject):
             multiple_strategy=MultipleStrategy.QUEUE,
         )
 
-    def background(self, coro_func: Coroutine[Any, Any, T], on_done=None):
+    def background(self, coro_func: Coroutine[Any, Any, T], on_done: Callable[[T], None] | None = None):
         """Schedule a coroutine to run sequentially on the worker loop."""
 
         def on_success(result):

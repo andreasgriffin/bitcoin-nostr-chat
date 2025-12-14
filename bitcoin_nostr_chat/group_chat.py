@@ -188,7 +188,7 @@ class NostrProtocol(BaseProtocol):
         self.dm_connection.send(dm, self.my_public_key())
 
     def subscribe(self):
-        def on_done(subscription_id: str):
+        def on_done(subscription_id: str | None):
             logger.debug(f"{self.__class__.__name__}  Finished subscribed to: {subscription_id}")
 
         self.dm_connection.subscribe(start_time=self.sync_start, on_done=on_done)
@@ -283,7 +283,7 @@ class GroupChat(BaseProtocol):
         return self.members + [self.my_public_key()]
 
     def subscribe(self):
-        def on_done(subscription_id: str):
+        def on_done(subscription_id: str | None):
             logger.debug(f"{self.__class__.__name__}  Successfully subscribed to {subscription_id}")
 
         start_time = self.sync_start - self.nip17_time_uncertainty if self.sync_start else self.sync_start

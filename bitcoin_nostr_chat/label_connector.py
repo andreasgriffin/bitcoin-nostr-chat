@@ -28,9 +28,10 @@
 
 
 import logging
+from typing import cast
 
 from bitcoin_qr_tools.data import Data, DataType
-from bitcoin_safe_lib.gui.qt.signal_tracker import SignalTracker
+from bitcoin_safe_lib.gui.qt.signal_tracker import SignalProtocol, SignalTracker
 from nostr_sdk import PublicKey
 from PyQt6.QtCore import QObject, pyqtSignal
 
@@ -41,7 +42,9 @@ logger = logging.getLogger(__name__)
 
 
 class LabelConnector(QObject):
-    signal_label_bip329_received = pyqtSignal(Data, PublicKey)  # Data, Author
+    signal_label_bip329_received = cast(
+        SignalProtocol[[Data, PublicKey]], pyqtSignal(Data, PublicKey)
+    )  # Data, Author
 
     def __init__(
         self,

@@ -172,7 +172,9 @@ class DmConnection(QObject, Generic[T_BaseDM]):
     ):
         self.async_thread.loop_in_thread.run_background(self.async_dm_connection.unsubscribe_all())
 
-    def subscribe(self, start_time: datetime | None = None, on_done: Callable[[str], None] | None = None):
+    def subscribe(
+        self, start_time: datetime | None = None, on_done: Callable[[str | None], None] | None = None
+    ):
         self._ensure_clients_connected()
         self.async_thread.queue_coroutine(self.async_dm_connection.subscribe(start_time), on_done=on_done)
 
@@ -182,7 +184,7 @@ class DmConnection(QObject, Generic[T_BaseDM]):
     ):
         self.async_thread.queue_coroutine(self.async_dm_connection.unsubscribe(public_keys))
 
-    def replay_events_from_dump(self, on_done: Callable[[], None] | None = None):
+    def replay_events_from_dump(self, on_done: Callable[[None], None] | None = None):
         self._ensure_clients_connected()
         self.async_thread.queue_coroutine(self.async_dm_connection.replay_events_from_dump(), on_done=on_done)
 
@@ -196,5 +198,5 @@ class DmConnection(QObject, Generic[T_BaseDM]):
         self.async_thread.stop()
         self.async_dm_connection.close()
 
-    def queue_coroutine(self, coro: Coroutine[Any, Any, T], on_done: Callable[[], None] | None = None):
+    def queue_coroutine(self, coro: Coroutine[Any, Any, T], on_done: Callable[[T], None] | None = None):
         self.async_thread.queue_coroutine(coro, on_done=on_done)
