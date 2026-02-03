@@ -11,7 +11,6 @@ def get_preferred_relays() -> list[str]:
         "wss://relay.mostro.network",
         "wss://backup.keychat.io",
         "wss://purplerelay.com",
-        "wss://nostr.jfischer.org",
         "wss://nostr-verified.wellorder.net",
     ]
 
