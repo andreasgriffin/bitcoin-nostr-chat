@@ -167,10 +167,16 @@ class DmConnection(QObject, Generic[T_BaseDM]):
             relays=list(set([str(relay.url()) for relay in list_relays])), last_updated=datetime.now()
         )
 
+    def _run_coroutine_blocking(self, coro: Coroutine[Any, Any, T]) -> T | None:
+        if not self.async_thread.is_running():
+            coro.close()
+            return None
+        return self.async_thread.run_coroutine_blocking(coro)
+
     def unsubscribe_all(
         self,
     ):
-        self.async_thread.loop_in_thread.run_background(self.async_dm_connection.unsubscribe_all())
+        self._run_coroutine_blocking(self.async_dm_connection.unsubscribe_all())
 
     def subscribe(
         self, start_time: datetime | None = None, on_done: Callable[[str | None], None] | None = None
@@ -189,14 +195,15 @@ class DmConnection(QObject, Generic[T_BaseDM]):
         self.async_thread.queue_coroutine(self.async_dm_connection.replay_events_from_dump(), on_done=on_done)
 
     def disconnect_clients(self):
-        self.async_thread.queue_coroutine(
+        self._run_coroutine_blocking(
             self.async_dm_connection.disconnect_client(self.async_dm_connection.client)
         )
 
     def close(self):
+        self.unsubscribe_all()
         self.disconnect_clients()
-        self.async_thread.stop()
         self.async_dm_connection.close()
+        self.async_thread.stop()
 
     def queue_coroutine(self, coro: Coroutine[Any, Any, T], on_done: Callable[[T], None] | None = None):
         self.async_thread.queue_coroutine(coro, on_done=on_done)
