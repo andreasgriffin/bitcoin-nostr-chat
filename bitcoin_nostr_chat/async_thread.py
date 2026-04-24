@@ -67,6 +67,10 @@ class AsyncThread(QObject):
         logger.debug("Task failed: %s", exc)
         self.result_ready.emit(exc, coro, callback)
 
+    def is_running(self) -> bool:
+        loop = self.loop_in_thread._loop
+        return bool(loop and loop.is_running())
+
     def stop(self):
         """Stop the event loop (if needed) and wait for the thread to finish."""
         if self._owns_loop_in_thread:
