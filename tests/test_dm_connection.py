@@ -44,18 +44,18 @@ class FakeAsyncDmConnection:
         self.events.append("close")
 
 
-def _make_connection(events: list[str], running: bool = True) -> DmConnection[str]:
+def _make_connection(events: list[str], running: bool = True) -> DmConnection[str]:  # type: ignore
     dummy_signals = DummySignals()
     async_thread = FakeAsyncThread(events=events, running=running)
     async_dm_connection = FakeAsyncDmConnection(events=events)
-    return DmConnection[str](
+    return DmConnection[str](  # type: ignore
         signal_dm=dummy_signals.signal_dm,
         from_serialized=lambda serialized: serialized,
         keys=Keys.generate(),
         get_currently_allowed=lambda: set(),
         loop_in_thread=None,
-        async_thread=async_thread,
-        async_dm_connection=async_dm_connection,
+        async_thread=async_thread,  # type: ignore
+        async_dm_connection=async_dm_connection,  # type: ignore
     )
 
 
