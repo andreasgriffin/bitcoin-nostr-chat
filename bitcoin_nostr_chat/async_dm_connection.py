@@ -267,7 +267,7 @@ class AsyncDmConnection(QObject, Generic[T_BaseDM]):
         self,
         forbidden_data_types: list[DataType] | None = None,
     ):
-        def include_item(item: T_BaseDM) -> bool:
+        def include_item(item: BaseDM) -> bool:
             if isinstance(item, ChatDM):
                 if forbidden_data_types is not None:
                     if item.data and item.data.data_type in forbidden_data_types:
@@ -276,12 +276,21 @@ class AsyncDmConnection(QObject, Generic[T_BaseDM]):
                 return False
             return True
 
+        processed_ids = set()
+        all_dms: list[BaseDM] = []
+        for dm in list(self.notification_handler.processed_dms) + list(self.dms_from_dump):
+            if dm.event:
+                if (_event_id := dm.event.id()) in processed_ids:
+                    continue
+                processed_ids.add(_event_id)
+
+            if include_item(dm):
+                all_dms.append(dm)
+
         return {
             "use_timer": self.use_timer,
             "keys": self.keys.secret_key().to_bech32(),
-            "dms_from_dump": [
-                item.dump() for item in self.notification_handler.processed_dms if item and include_item(item)
-            ],
+            "dms_from_dump": [item.dump() for item in all_dms],
             # TODO: This might be added in the future,
             # to allow restoring labels from devices that are connected after the wallet has been shut down
             # "untrusted_events": [
