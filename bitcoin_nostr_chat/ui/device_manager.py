@@ -88,7 +88,7 @@ class TrustedDeviceItem(BaseDeviceItem):
         top_layout.addWidget(self.label)
 
         # Close button (top-right)
-        self.close_button = QPushButton()
+        self.close_button = QPushButton(self)
         self.close_button.setIcon(svg_tools.get_QIcon("close.svg"))
         self.close_button.setFixedSize(24, 24)  # Set button size
         self.close_button.setFlat(True)  # Optional: make the button flat
@@ -128,7 +128,7 @@ class UntrustedDeviceItem(BaseDeviceItem):
         top_layout.addWidget(self.label)
 
         # Close button (top-right)
-        self.button_trust = QPushButton()
+        self.button_trust = QPushButton(self)
         top_layout.addWidget(self.button_trust)
 
         # Add the top layout to the main layout
@@ -237,8 +237,8 @@ class DeviceList(QListWidget, Generic[T]):
 class DeviceManager(QWidget):
     signal_set_alias = cast(SignalProtocol[[str, str]], pyqtSignal(str, str))
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(parent)
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(0, 0, 0, 0)  # Left, Top, Right, Bottom margins
 
@@ -246,14 +246,14 @@ class DeviceManager(QWidget):
         self.group_trusted_layout = QVBoxLayout(self.group_trusted)
         self._layout.addWidget(self.group_trusted)
 
-        self.trusted = DeviceList[TrustedDeviceItem]()
+        self.trusted = DeviceList[TrustedDeviceItem](self)
         self.group_trusted_layout.addWidget(self.trusted)
 
         self.group_untrusted = QGroupBox()
         self.group_untrusted_layout = QVBoxLayout(self.group_untrusted)
         self._layout.addWidget(self.group_untrusted)
 
-        self.untrusted = DeviceList[UntrustedDeviceItem]()
+        self.untrusted = DeviceList[UntrustedDeviceItem](self)
         self.group_untrusted_layout.addWidget(self.untrusted)
 
         self.trusted.signal_untrust_device.connect(self.create_untrusted_device)
@@ -266,7 +266,7 @@ class DeviceManager(QWidget):
         pub_key_bech32: str,
         alias: str | None = None,
     ):
-        device = UntrustedDeviceItem(pub_key_bech32=pub_key_bech32, alias=alias)
+        device = UntrustedDeviceItem(pub_key_bech32=pub_key_bech32, alias=alias, parent=self.untrusted)
         device.signal_set_alias.connect(self.signal_set_alias)
         self.untrusted.add_list_item(device)
 
@@ -275,7 +275,7 @@ class DeviceManager(QWidget):
         pub_key_bech32: str,
         alias: str | None = None,
     ):
-        device = TrustedDeviceItem(pub_key_bech32=pub_key_bech32, alias=alias)
+        device = TrustedDeviceItem(pub_key_bech32=pub_key_bech32, alias=alias, parent=self.trusted)
         device.signal_set_alias.connect(self.signal_set_alias)
         self.trusted.add_list_item(device)
 

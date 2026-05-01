@@ -123,29 +123,29 @@ class UI(QtWidgets.QWidget):
         self._layout = QHBoxLayout(self)
         # self._layout.setContentsMargins(0, 0, 0, 0)  # Left, Top, Right, Bottom margins
 
-        self.splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.splitter = QSplitter(Qt.Orientation.Horizontal, self)
         self._layout.addWidget(self.splitter)
 
-        left_side = QWidget()
-        left_side_layout = QVBoxLayout(left_side)
+        self.left_side = QWidget(self)
+        left_side_layout = QVBoxLayout(self.left_side)
         left_side_layout.setContentsMargins(0, 0, 0, 0)  # Left, Top, Right, Bottom margins
 
-        self.splitter.addWidget(left_side)
+        self.splitter.addWidget(self.left_side)
 
-        self.tabs = QTabWidget()
+        self.tabs = QTabWidget(self)
         self.splitter.addWidget(self.tabs)
 
-        header = QWidget()
-        header_layout = QHBoxLayout(header)
+        self.header = QWidget(self.left_side)
+        header_layout = QHBoxLayout(self.header)
         header_layout.setContentsMargins(0, 0, 0, 0)  # Left, Top, Right, Bottom margins
-        left_side_layout.addWidget(header)
+        left_side_layout.addWidget(self.header)
 
-        self.title_label = QLabel()
+        self.title_label = QLabel(self.header)
         header_layout.addWidget(self.title_label)
 
-        toolbar_button = QToolButton()
-        toolbar_button.setIcon(svg_tools.get_QIcon("bi--gear.svg"))
-        header_layout.addWidget(toolbar_button)
+        self.toolbar_button = QToolButton(self.header)
+        self.toolbar_button.setIcon(svg_tools.get_QIcon("bi--gear.svg"))
+        header_layout.addWidget(self.toolbar_button)
 
         self.menu = QMenu(self)
         self.action_export_identity = self.menu.addAction("", self.export_sync_key)
@@ -156,11 +156,11 @@ class UI(QtWidgets.QWidget):
             self.action_set_keys.setIcon(svg_tools.get_QIcon("bi--upload.svg"))
         self.action_reset_identity = self.menu.addAction("", self.signal_reset_keys.emit)
         self.action_set_relays = self.menu.addAction("", self.ask_for_nostr_relays)
-        toolbar_button.setMenu(self.menu)
-        toolbar_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        toolbar_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.toolbar_button.setMenu(self.menu)
+        self.toolbar_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.toolbar_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
-        self.device_manager = DeviceManager()
+        self.device_manager = DeviceManager(self.left_side)
         left_side_layout.addWidget(self.device_manager)
 
         self.updateUi()
