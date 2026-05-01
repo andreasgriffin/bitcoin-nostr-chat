@@ -38,8 +38,8 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QBrush, QColor, QResizeEvent
 from PyQt6.QtWidgets import (
     QApplication,
+    QBoxLayout,
     QFileDialog,
-    QHBoxLayout,
     QLineEdit,
     QMainWindow,
     QPushButton,
@@ -70,18 +70,24 @@ class ChatGui(QWidget):
         # self._layout.setContentsMargins(0, 0, 0, 0)  # Left, Top, Right, Bottom margins
         self._layout.addWidget(self.chat_component)
 
-        self.textInput = QLineEdit()
+        self.controls_widget = QWidget(self)
+        self.dynamicLayout = QBoxLayout(QBoxLayout.Direction.TopToBottom, self.controls_widget)
+        self.dynamicLayout.setContentsMargins(0, 0, 0, 0)
+        self._layout.addWidget(self.controls_widget)
+
+        self.textInput = QLineEdit(self)
         self.textInput.textChanged.connect(self.textChanged)
 
-        self.sendButton = QPushButton()
-        self.shareButton = QPushButton()
+        self.sendButton = QPushButton(self)
+        self.shareButton = QPushButton(self)
+        self.dynamicLayout.addWidget(self.textInput)
+        self.dynamicLayout.addWidget(self.sendButton)
+        self.dynamicLayout.addWidget(self.shareButton)
         self.textChanged("")
         os.path.dirname(os.path.abspath(__file__))
         self.shareButton.setIcon(svg_tools.get_QIcon("bi--upload.svg"))
         self.shareButton.clicked.connect(self.on_share_button_click)
 
-        # Placeholder for the dynamic layout
-        self.dynamicLayout = QVBoxLayout()
         self.updateDynamicLayout()
         self.updateUi()
 
@@ -118,22 +124,14 @@ class ChatGui(QWidget):
 
     def updateDynamicLayout(self):
         threashold = 200
-        expected_layout_class = QHBoxLayout if self.width() > threashold else QVBoxLayout
-        if isinstance(self.dynamicLayout, expected_layout_class):
+        expected_direction = (
+            QBoxLayout.Direction.LeftToRight
+            if self.width() > threashold
+            else QBoxLayout.Direction.TopToBottom
+        )
+        if self.dynamicLayout.direction() == expected_direction:
             return
-
-        # Clear the dynamic layout first
-        while self.dynamicLayout.count():
-            layout_item = self.dynamicLayout.takeAt(0)
-            if layout_item and (_widget := layout_item.widget()):
-                _widget.setParent(None)
-
-        self.dynamicLayout = expected_layout_class()
-        self.dynamicLayout.addWidget(self.textInput)
-        self.dynamicLayout.addWidget(self.sendButton)
-        self.dynamicLayout.addWidget(self.shareButton)
-
-        self._layout.addLayout(self.dynamicLayout)
+        self.dynamicLayout.setDirection(expected_direction)
 
     def resizeEvent(self, a0: QResizeEvent | None) -> None:
         self.updateDynamicLayout()
