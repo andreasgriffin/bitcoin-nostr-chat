@@ -72,6 +72,7 @@ class ChatGui(QWidget):
 
         self.controls_widget = QWidget(self)
         self.dynamicLayout = QBoxLayout(QBoxLayout.Direction.TopToBottom, self.controls_widget)
+        self.dynamicLayout.setContentsMargins(0, 0, 0, 0)
         self._layout.addWidget(self.controls_widget)
 
         self.textInput = QLineEdit(self)
