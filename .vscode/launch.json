@@ -1,0 +1,89 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [{
+    "name": "demo",
+    "type": "python",
+    "request": "launch",
+    "program": "demo.py",
+    "console": "integratedTerminal",
+    "args": [
+      "--protcol_secret_str=25akjff44fbuig44",
+      "--disable_compression",
+      "--file_name=nostr_demo_app.json"
+    ],
+    "justMyCode": false
+  },{
+    "name": "demo2",
+    "type": "python",
+    "request": "launch",
+    "program": "demo.py",
+    "console": "integratedTerminal",
+    "args": [
+      "--protcol_secret_str=25akjff44fbuig44",
+      "--disable_compression",
+      "--file_name=nostr_demo_app2.json"
+    ],    "justMyCode": false
+
+  },
+    {
+      "name": "Pytest",
+      "type": "python",
+      "request": "launch",
+      "module": "pytest",
+      "args": [
+        "-vvv",
+        "--log-cli-level=0"
+      ],
+      "console": "integratedTerminal"
+    }, {
+      "name": "Pytest: Current File",
+      "type": "python",
+      "request": "launch",
+      "module": "pytest",
+      "args": [
+        "-vvv",
+        "${file}",
+        "-o", "log_cli=true",
+        "-o", "log_cli_level=DEBUG",
+      ],
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },{
+      "name": "Pytest: Check preferred relays",
+      "type": "python",
+      "request": "launch",
+      "module": "pytest",
+      "args": [
+        "-vvv",
+        "-o", "log_cli=true",
+        "-o", "log_cli_level=INFO",
+        "--preferred_relays"
+      ],
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },{
+      "name": "Pytest: Check relays",
+      "type": "python",
+      "request": "launch",
+      "module": "pytest",
+      "args": [
+        "-vvv",
+        "-o", "log_cli=true",
+        "-o", "log_cli_level=INFO",
+        "--testrelays"
+      ],
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Current File",
+      "type": "python",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal"
+    }
+  ]
+}

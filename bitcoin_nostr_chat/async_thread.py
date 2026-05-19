@@ -55,20 +55,37 @@ class AsyncThread(QObject):
         super().__init__(parent)
         self.loop_in_thread = loop_in_thread if loop_in_thread else LoopInThread()
         self._owns_loop_in_thread = loop_in_thread is None
+        self._stopped = False
         # _queue_key such that it is independent of other AsyncThread int he loop
         self._queue_key = f"AsyncThread{id(self)}"
+        self.result_ready.connect(self._dispatch_result)
+
+    def _dispatch_result(self, result: object, coro: object, callback: object):
+        if self._stopped:
+            return
+
+        if callable(callback):
+            callback(result)
+            return
+
+        logger.debug("Finished %s", coro)
 
     def _emit_result(self, result: T, coro: Coroutine[Any, Any, T], callback: Callable[[T], None] | None):
         # logger.debug("Task finished: %s", coro)
+        if self._stopped:
+            return
         self.result_ready.emit(result, coro, callback)
 
     def _emit_error(self, exc_info, coro: Coroutine[Any, Any, T], callback: Callable[[T], None] | None):
         exc = exc_info[1] if exc_info and len(exc_info) > 1 else Exception("Unknown error")
         logger.debug("Task failed: %s", exc)
+        if self._stopped:
+            return
         self.result_ready.emit(exc, coro, callback)
 
     def stop(self):
         """Stop the event loop (if needed) and wait for the thread to finish."""
+        self._stopped = True
         if self._owns_loop_in_thread:
             self.loop_in_thread.stop()
 
