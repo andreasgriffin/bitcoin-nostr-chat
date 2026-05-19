@@ -27,6 +27,7 @@
 # SOFTWARE.
 import logging
 from abc import abstractmethod
+from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import cast
 
@@ -93,7 +94,7 @@ class BaseProtocol(QObject):
         return self.dm_connection.async_dm_connection.keys.public_key()
 
     @abstractmethod
-    def subscribe(self):
+    def subscribe(self, on_done: Callable[[str | None], None] | None = None):
         pass
 
     @abstractmethod
@@ -105,6 +106,7 @@ class BaseProtocol(QObject):
         keys: Keys | None = None,
         relay_list: RelayList | None = None,
         sync_start: datetime | None = None,
+        on_done: Callable[[str | None], None] | None = None,
     ):
         keys = keys if keys else self.dm_connection.async_dm_connection.keys
         relay_list = relay_list if relay_list else self.dm_connection.async_dm_connection.relay_list
@@ -117,10 +119,14 @@ class BaseProtocol(QObject):
         self.dm_connection.async_dm_connection.create_clients(
             keys, processed_dms=self.dm_connection.async_dm_connection.notification_handler.processed_dms
         )
-        self.subscribe()
+        self.subscribe(on_done=on_done)
 
-    def set_relay_list(self, relay_list: RelayList):
-        self.refresh_dm_connection(relay_list=relay_list, sync_start=None)
+    def set_relay_list(
+        self,
+        relay_list: RelayList,
+        on_done: Callable[[str | None], None] | None = None,
+    ):
+        self.refresh_dm_connection(relay_list=relay_list, sync_start=None, on_done=on_done)
 
     @abstractmethod
     def get_currently_allowed(self) -> set[str]:
@@ -187,11 +193,13 @@ class NostrProtocol(BaseProtocol):
         )
         self.dm_connection.send(dm, self.my_public_key())
 
-    def subscribe(self):
-        def on_done(subscription_id: str | None):
+    def subscribe(self, on_done: Callable[[str | None], None] | None = None):
+        def on_done_callback(subscription_id: str | None):
             logger.debug(f"{self.__class__.__name__}  Finished subscribed to: {subscription_id}")
+            if on_done:
+                on_done(subscription_id)
 
-        self.dm_connection.subscribe(start_time=self.sync_start, on_done=on_done)
+        self.dm_connection.subscribe(start_time=self.sync_start, on_done=on_done_callback)
 
     def dump(self):
         return {
@@ -282,12 +290,14 @@ class GroupChat(BaseProtocol):
     def members_including_me(self):
         return self.members + [self.my_public_key()]
 
-    def subscribe(self):
-        def on_done(subscription_id: str | None):
+    def subscribe(self, on_done: Callable[[str | None], None] | None = None):
+        def on_done_callback(subscription_id: str | None):
             logger.debug(f"{self.__class__.__name__}  Successfully subscribed to {subscription_id}")
+            if on_done:
+                on_done(subscription_id)
 
         start_time = self.sync_start - self.nip17_time_uncertainty if self.sync_start else self.sync_start
-        self.dm_connection.subscribe(start_time=start_time, on_done=on_done)
+        self.dm_connection.subscribe(start_time=start_time, on_done=on_done_callback)
 
     def dump(self):
         forbidden_data_types = [DataType.LabelsBip329]

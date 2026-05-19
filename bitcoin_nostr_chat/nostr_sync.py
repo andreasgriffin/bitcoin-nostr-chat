@@ -29,6 +29,7 @@
 
 import logging
 from datetime import datetime, timedelta
+from functools import partial
 from typing import Any, cast
 
 import bdkpython as bdk
@@ -36,7 +37,7 @@ from bitcoin_qr_tools.data import Data, DataType
 from bitcoin_safe_lib.async_tools.loop_in_thread import LoopInThread
 from bitcoin_safe_lib.gui.qt.signal_tracker import SignalProtocol, SignalTracker
 from nostr_sdk import Keys, PublicKey, SecretKey
-from PyQt6.QtCore import QObject, pyqtSignal
+from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox
 
 from bitcoin_nostr_chat import DEFAULT_USE_COMPRESSION
@@ -55,6 +56,8 @@ from .html import html_f
 from .ui.ui import UI
 
 logger = logging.getLogger(__name__)
+
+INITIAL_DISCOVERY_REANNOUNCE_DELAYS_MS = (1500,)
 
 
 def is_binary(file_path: str):
@@ -146,11 +149,26 @@ class BaseNostrSync(QObject):
         self.group_chat.dm_connection.close()
         self.nostr_protocol.dm_connection.close()
 
+    def _publish_my_key_after_protocol_subscription(self, force=False):
+        logger.debug("Protocol subscription is ready; publishing discovery announcement")
+        self.publish_my_key_in_protocol(force=force)
+        for delay_ms in INITIAL_DISCOVERY_REANNOUNCE_DELAYS_MS:
+            QTimer.singleShot(delay_ms, partial(self.publish_my_key_in_protocol, force=True))
+
     def on_set_relays(self, relay_list: RelayList):
         logger.info(f"Setting relay_list {relay_list} ")
         self.group_chat.set_relay_list(relay_list)
-        self.nostr_protocol.set_relay_list(relay_list)
-        self.publish_my_key_in_protocol(force=True)
+        self.nostr_protocol.set_relay_list(
+            relay_list,
+            on_done=lambda subscription_id: (
+                logger.warning(
+                    "Protocol subscription did not return an id after relay change;"
+                    " skipping discovery publish"
+                )
+                if subscription_id is None
+                else self._publish_my_key_after_protocol_subscription(force=True)
+            ),
+        )
         logger.info(f"Done Setting relay_list {relay_list} ")
 
     def is_me(self, public_key: PublicKey) -> bool:
@@ -262,13 +280,21 @@ class BaseNostrSync(QObject):
         return sync
 
     def subscribe(self):
-        self.nostr_protocol.subscribe()
+        def on_protocol_subscribed(subscription_id: str | None):
+            if subscription_id is None:
+                logger.warning(
+                    "Protocol subscription did not return an id; skipping initial discovery publish"
+                )
+                return
+
+            self._publish_my_key_after_protocol_subscription()
+
+        self.nostr_protocol.subscribe(on_done=on_protocol_subscribed)
         self.group_chat.subscribe()
 
         # restore/replay chat texts
         self.nostr_protocol.dm_connection.replay_events_from_dump()
         self.group_chat.dm_connection.replay_events_from_dump()
-        self.publish_my_key_in_protocol()
 
     def unsubscribe(self):
         self.nostr_protocol.dm_connection.unsubscribe_all()
