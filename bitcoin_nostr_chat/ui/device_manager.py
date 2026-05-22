@@ -177,10 +177,12 @@ class DeviceList(QListWidget, Generic[T]):
         super().__init__(parent)
         self.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
 
-    def add_list_item(self, device_item: T):
+    def add_list_item(self, device_item: T) -> bool:
         if self.get_device(device_item.pub_key_bech32):
             logger.debug(f"Duplicate {device_item.pub_key_bech32=}")
-            return
+            device_item.hide()
+            device_item.setParent(None)
+            return False
 
         list_item = QListWidgetItem()
 
@@ -197,6 +199,7 @@ class DeviceList(QListWidget, Generic[T]):
         device_item.signal_untrust_device.connect(self.signal_untrust_device)
         device_item.signal_trust_device.connect(self.signal_trust_device)
         self.updateUi()
+        return True
 
     def get_device(self, pub_key_bech32: str) -> T | None:
         for i in range(self.count()):
@@ -221,6 +224,12 @@ class DeviceList(QListWidget, Generic[T]):
         """
         Removes the given item from the QListWidget.
         """
+        widget = self.itemWidget(item)
+        if widget:
+            self.removeItemWidget(item)
+            widget.hide()
+            widget.setParent(None)
+
         row = self.row(item)
         if row >= 0:
             self.takeItem(row)
@@ -266,18 +275,32 @@ class DeviceManager(QWidget):
         pub_key_bech32: str,
         alias: str | None = None,
     ):
+        existing = self.untrusted.get_device(pub_key_bech32)
+        if existing:
+            if alias:
+                existing.set_alias_text(alias)
+            return existing
+
         device = UntrustedDeviceItem(pub_key_bech32=pub_key_bech32, alias=alias, parent=self.untrusted)
         device.signal_set_alias.connect(self.signal_set_alias)
         self.untrusted.add_list_item(device)
+        return device
 
     def create_trusted_device(
         self,
         pub_key_bech32: str,
         alias: str | None = None,
     ):
+        existing = self.trusted.get_device(pub_key_bech32)
+        if existing:
+            if alias:
+                existing.set_alias_text(alias)
+            return existing
+
         device = TrustedDeviceItem(pub_key_bech32=pub_key_bech32, alias=alias, parent=self.trusted)
         device.signal_set_alias.connect(self.signal_set_alias)
         self.trusted.add_list_item(device)
+        return device
 
     def updateUi(self):
         self.group_trusted.setTitle(self.tr("Trusted"))

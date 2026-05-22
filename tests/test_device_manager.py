@@ -32,6 +32,30 @@ def test_device_manager_items_are_parented_and_not_top_level_windows(qtbot: QtBo
     assert not untrusted_item.button_trust.isWindow()
 
 
+def test_duplicate_device_creation_does_not_leave_orphaned_widgets(qtbot: QtBot) -> None:
+    widget = DeviceManager()
+    qtbot.addWidget(widget)
+
+    widget.create_untrusted_device(pub_key_bech32="duplicate-device")
+    widget.create_untrusted_device(pub_key_bech32="duplicate-device")
+
+    assert widget.untrusted.count() == 1
+    qtbot.waitUntil(lambda: len(widget.untrusted.findChildren(UntrustedDeviceItem)) == 1)
+
+
+def test_removing_device_also_removes_embedded_widget(qtbot: QtBot) -> None:
+    widget = DeviceManager()
+    qtbot.addWidget(widget)
+
+    widget.create_untrusted_device(pub_key_bech32="remove-device")
+    assert widget.untrusted.count() == 1
+
+    widget.untrusted.remove(pub_key_bech32="remove-device")
+
+    assert widget.untrusted.count() == 0
+    qtbot.waitUntil(lambda: len(widget.untrusted.findChildren(UntrustedDeviceItem)) == 0)
+
+
 def test_nostr_ui_containers_are_parented_and_not_top_level_windows(qtbot: QtBot) -> None:
     widget = UI(my_keys=Keys.generate(), signals_min=SignalsMin())
     qtbot.addWidget(widget)
