@@ -1,24 +1,25 @@
 def get_preferred_relays() -> list[str]:
-    return [
-        "wss://purplerelay.com",
-        "wss://nostr.sathoarder.com",
-        "wss://nostr.mom",
-        "wss://nostr.sathoarder.com",
-        "wss://nostr.vulpem.com",
-        "wss://relay.primal.net",
-        "wss://nostr.stakey.net",
-        "wss://relay.nostr.net",
-        "wss://nos.lol",
-        "wss://eden.nostr.land",
-        "wss://nostr.land",
-        "wss://purplerelay.com",
-        "wss://strfry.openhoofd.nl",
-        "wss://relay.primal.net",
-        "wss://relay.tapestry.ninja",
-        "wss://relay.satlantis.io",
-        "wss://relay.satlantis.io",
-        "wss://backup.keychat.io",
-    ]
+    return list(
+        set(
+            [
+                "wss://nostr.mom",
+                "wss://nos.lol",
+                "wss://purplerelay.com",
+                "wss://nostr.sathoarder.com",
+                "wss://nostr.vulpem.com",
+                "wss://relay.primal.net",
+                "wss://nostr.stakey.net",
+                "wss://relay.nostr.net",
+                "wss://eden.nostr.land",
+                # one of the ones below causes a infinite delay of all subscriptions
+                # "wss://nostr.land",
+                # "wss://strfry.openhoofd.nl",
+                # "wss://relay.tapestry.ninja",
+                # "wss://relay.satlantis.io",
+                # "wss://backup.keychat.io",
+            ]
+        )
+    )
 
 
 def get_default_delays() -> list[str]:
