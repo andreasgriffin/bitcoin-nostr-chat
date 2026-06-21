@@ -43,7 +43,7 @@ files = [
 
 [[package]]
 name = "bitcoin-qr-tools"
-version = "3.0.1"
+version = "3.2.0"
 description = "Python bitcoin qr reader and generator"
 optional = false
 python-versions = ">=3.10,<3.13"
@@ -58,7 +58,7 @@ hwi = "^3.0.0"
 mss = "^9.0.1"
 numpy = "^2.0.1"
 opencv-python-headless = "^4.10.0.84"
-pillow = "^10.4.0"
+pillow = ">=10.4.0"
 pygame = "^2.6.1"
 pyqrcode = "^1.2.1"
 pyqt6 = "^6.7.0"
@@ -68,8 +68,8 @@ segno = "1.6.1"
 [package.source]
 type = "git"
 url = "https://github.com/andreasgriffin/bitcoin-qr-tools.git"
-reference = "main"
-resolved_reference = "27746420e536fb2ba48d83127fd57ca70579fb09"
+reference = "ait-for-mac-permission"
+resolved_reference = "afeb6f825c82653d30973c6152c260b261992579"
 
 [[package]]
 name = "bitcoin-safe-lib"
@@ -1422,4 +1422,4 @@ test = ["pytest", "websockets"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.13"
-content-hash = "a0394d26ae5370d0d509e59579dee60ae0142d5fd419be0eaee92c9739d5976e"
+content-hash = "9a6133e3aae335eea3e56cb3f9beb3e622dc83420932bd0e408781f6ebc15107"
