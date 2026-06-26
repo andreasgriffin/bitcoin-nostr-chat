@@ -182,7 +182,7 @@ class AsyncDmConnection(QObject, Generic[T_BaseDM]):
 
         if start_time:
             timestamp = Timestamp.from_secs(int(start_time.timestamp()))
-            logger.error(
+            logger.debug(
                 f"Subscribe to {short_key(recipient.to_bech32())} from {timestamp.to_human_datetime()}"
             )
             this_filter = this_filter.since(timestamp=timestamp)
