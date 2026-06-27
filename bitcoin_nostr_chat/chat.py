@@ -27,14 +27,19 @@
 # SOFTWARE.
 
 
+import hashlib
+import json
 import logging
+from dataclasses import dataclass, field
 from datetime import datetime
+from functools import partial
 from typing import cast
+from uuid import uuid4
 
 import bdkpython as bdk
 from bitcoin_qr_tools.data import Data, DataType
 from bitcoin_safe_lib.gui.qt.signal_tracker import SignalProtocol, SignalTracker
-from nostr_sdk import PublicKey
+from nostr_sdk import EventId, PublicKey
 from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox
 
@@ -49,6 +54,26 @@ from bitcoin_nostr_chat.ui.util import chat_color, short_key
 from .group_chat import ChatDM
 
 logger = logging.getLogger(__name__)
+
+PENDING_ICON_NAME = "bi--clock-history.svg"
+CONFIRMED_ICON_NAME = "bi--check2.svg"
+
+
+@dataclass
+class OutgoingDeliveryState:
+    local_id: str
+    correlation_key: str
+    dm: ChatDM
+    recipient_pubkeys: list[str]
+    publish_results: dict[str, EventId | None] = field(default_factory=dict)
+    failure_messages: dict[str, str] = field(default_factory=dict)
+    self_copy_received: bool = False
+
+    @property
+    def confirmed(self) -> bool:
+        return self.self_copy_received and all(
+            self.publish_results.get(recipient) is not None for recipient in self.recipient_pubkeys
+        )
 
 
 class BaseChat(QObject):
@@ -78,6 +103,8 @@ class BaseChat(QObject):
         self.signal_tracker.connect(
             self.gui.chat_component.list_widget.signal_clear, self.clear_chat_from_memory
         )
+        self._outgoing_delivery_states: dict[str, OutgoingDeliveryState] = {}
+        self._outgoing_by_correlation_key: dict[str, str] = {}
 
     def is_me(self, public_key: PublicKey) -> bool:
         return public_key.to_bech32() == self.group_chat.my_public_key().to_bech32()
@@ -106,9 +133,23 @@ class BaseChat(QObject):
         for dm in self.gui.dms:
             if dm in processed_dms:
                 processed_dms.remove(dm)
+        self._outgoing_delivery_states.clear()
+        self._outgoing_by_correlation_key.clear()
+        self.gui.clear_local_state()
 
     def close(self):
         self.signal_tracker.disconnect_all()
+
+    def _correlation_key_for_dm(self, dm: ChatDM) -> str:
+        payload = {
+            "label": dm.label.name,
+            "description": dm.description,
+            "data": dm.data.data_as_string() if dm.data else None,
+            "intended_recipient": dm.intended_recipient,
+            "created_at": dm.created_at.timestamp(),
+        }
+        serialized_payload = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(serialized_payload.encode()).hexdigest()
 
 
 class Chat(BaseChat):
@@ -147,6 +188,14 @@ class Chat(BaseChat):
         if dm.data and dm.data.data_type not in self.display_file_types:
             return
 
+        if dm.author and self.is_me(dm.author):
+            local_id = self._match_outgoing_delivery_state(dm)
+            if local_id:
+                self.gui.replace_local_dm(local_id, dm)
+                self._mark_self_copy_received(local_id)
+                self.signal_add_dm_to_chat.emit(dm)
+                return
+
         self.gui.add_dm(
             dm,
             is_me=self.is_me(dm.author),
@@ -160,11 +209,138 @@ class Chat(BaseChat):
             return alias
         return short_key(npub.to_bech32())
 
-    def _send(self, dm: ChatDM):
+    def _send(self, dm: ChatDM, outgoing_state: OutgoingDeliveryState):
+        on_publish_result = partial(self._on_publish_result, outgoing_state.local_id)
+        on_self_published = partial(self._on_self_published, outgoing_state.local_id)
+
         if self.restrict_to_counterparties:
-            self.group_chat.send_to(dm, recipients=self.restrict_to_counterparties)
+            self.group_chat.send_to(
+                dm,
+                recipients=self.restrict_to_counterparties,
+                on_publish_result=on_publish_result,
+                on_self_published=on_self_published,
+            )
         else:
-            self.group_chat.send(dm)
+            self.group_chat.send(dm, on_publish_result=on_publish_result, on_self_published=on_self_published)
+
+    def _register_outgoing_delivery_state(self, dm: ChatDM) -> OutgoingDeliveryState:
+        recipients = (
+            self.restrict_to_counterparties if self.restrict_to_counterparties else self.group_chat.members
+        )
+        recipient_pubkeys = [recipient.to_bech32() for recipient in recipients]
+        outgoing_state = OutgoingDeliveryState(
+            local_id=uuid4().hex,
+            correlation_key=self._correlation_key_for_dm(dm),
+            dm=dm,
+            recipient_pubkeys=recipient_pubkeys,
+        )
+        self._outgoing_delivery_states[outgoing_state.local_id] = outgoing_state
+        self._outgoing_by_correlation_key[outgoing_state.correlation_key] = outgoing_state.local_id
+        return outgoing_state
+
+    def _send_chat_dm(self, dm: ChatDM):
+        outgoing_state = self._register_outgoing_delivery_state(dm)
+        self.gui.add_dm(
+            dm,
+            is_me=True,
+            color=chat_color(self.group_chat.my_public_key().to_bech32()),
+            alias=None,
+            local_id=outgoing_state.local_id,
+            status_icon_name=PENDING_ICON_NAME,
+            status_tooltip=self._tooltip_for_outgoing_delivery_state(outgoing_state),
+        )
+        self._send(dm, outgoing_state=outgoing_state)
+        self.signal_send_dm.emit(dm)
+
+    def _tooltip_for_outgoing_delivery_state(self, outgoing_state: OutgoingDeliveryState) -> str:
+        waiting_for = [
+            short_key(recipient)
+            for recipient in outgoing_state.recipient_pubkeys
+            if outgoing_state.publish_results.get(recipient) is None
+        ]
+        if not outgoing_state.self_copy_received:
+            waiting_for.append(self.tr("self-copy"))
+
+        if outgoing_state.failure_messages:
+            failures = "; ".join(outgoing_state.failure_messages.values())
+            if waiting_for:
+                return self.tr("Pending: {waiting_for}. Failed: {failures}").format(
+                    waiting_for=", ".join(waiting_for), failures=failures
+                )
+            return self.tr("Pending due to failed publishes: {failures}").format(failures=failures)
+
+        if waiting_for:
+            return self.tr("Pending confirmation from {waiting_for}").format(
+                waiting_for=", ".join(waiting_for)
+            )
+
+        return self.tr("Published to all recipients and self-copy received")
+
+    def _refresh_outgoing_delivery_state(self, local_id: str):
+        outgoing_state = self._outgoing_delivery_states.get(local_id)
+        if not outgoing_state:
+            return
+
+        icon_name = CONFIRMED_ICON_NAME if outgoing_state.confirmed else PENDING_ICON_NAME
+        self.gui.update_outgoing_status(
+            local_id=local_id,
+            icon_name=icon_name,
+            tooltip=self._tooltip_for_outgoing_delivery_state(outgoing_state),
+        )
+
+        if outgoing_state.confirmed:
+            self._outgoing_by_correlation_key.pop(outgoing_state.correlation_key, None)
+            self._outgoing_delivery_states.pop(local_id, None)
+
+    def _on_publish_result(self, local_id: str, public_key_bech32: str, event_id: EventId | Exception | None):
+        outgoing_state = self._outgoing_delivery_states.get(local_id)
+        if not outgoing_state:
+            return
+
+        if isinstance(event_id, Exception):
+            outgoing_state.publish_results[public_key_bech32] = None
+            outgoing_state.failure_messages[public_key_bech32] = self.tr(
+                "Publish failed for {recipient}: {error}"
+            ).format(recipient=short_key(public_key_bech32), error=str(event_id))
+        elif event_id is None:
+            outgoing_state.publish_results[public_key_bech32] = None
+            outgoing_state.failure_messages[public_key_bech32] = self.tr(
+                "Publish failed for {recipient}"
+            ).format(recipient=short_key(public_key_bech32))
+        else:
+            outgoing_state.publish_results[public_key_bech32] = event_id
+            outgoing_state.failure_messages.pop(public_key_bech32, None)
+
+        self._refresh_outgoing_delivery_state(local_id)
+
+    def _on_self_published(self, local_id: str, event_id: EventId | Exception | None):
+        outgoing_state = self._outgoing_delivery_states.get(local_id)
+        if not outgoing_state:
+            return
+
+        if isinstance(event_id, Exception):
+            outgoing_state.failure_messages["self"] = self.tr("Could not publish self-copy: {error}").format(
+                error=str(event_id)
+            )
+        elif event_id is None:
+            outgoing_state.failure_messages["self"] = self.tr("Could not publish self-copy")
+        else:
+            outgoing_state.failure_messages.pop("self", None)
+
+        self._refresh_outgoing_delivery_state(local_id)
+
+    def _match_outgoing_delivery_state(self, dm: ChatDM) -> str | None:
+        correlation_key = self._correlation_key_for_dm(dm)
+        return self._outgoing_by_correlation_key.get(correlation_key)
+
+    def _mark_self_copy_received(self, local_id: str):
+        outgoing_state = self._outgoing_delivery_states.get(local_id)
+        if not outgoing_state:
+            return
+
+        outgoing_state.self_copy_received = True
+        outgoing_state.failure_messages.pop("self", None)
+        self._refresh_outgoing_delivery_state(local_id)
 
     def on_send_message_in_groupchat(self, text: str):
         dm = ChatDM(
@@ -174,8 +350,7 @@ class Chat(BaseChat):
             use_compression=self.group_chat.use_compression,
             created_at=datetime.now(),
         )
-        self._send(dm)
-        self.signal_send_dm.emit(dm)
+        self._send_chat_dm(dm)
 
     def on_share_file_in_groupchat(self, file_content: str, file_name: str):
         try:
@@ -185,8 +360,7 @@ class Chat(BaseChat):
                 QMessageBox.Icon.Warning, "Error", self.tr("You can only send only PSBTs or transactions")
             )
             return
-        self._send(dm)
-        self.signal_send_dm.emit(dm)
+        self._send_chat_dm(dm)
 
     def on_set_alias(self, npub: str, alias: str):
         self.group_chat.aliases[npub] = alias

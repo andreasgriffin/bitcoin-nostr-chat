@@ -35,8 +35,8 @@ from typing import cast
 from bitcoin_qr_tools.data import Data
 from bitcoin_safe_lib.gui.qt.signal_tracker import SignalProtocol
 from bitcoin_safe_lib.util import insert_invisible_spaces_for_wordwrap
-from PyQt6.QtCore import QPoint, Qt, pyqtSignal
-from PyQt6.QtGui import QIcon, QKeyEvent
+from PyQt6.QtCore import QPoint, QRect, QSize, Qt, pyqtSignal
+from PyQt6.QtGui import QIcon, QKeyEvent, QPainter
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -47,6 +47,9 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QMenu,
     QPushButton,
+    QStyle,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
     QVBoxLayout,
     QWidget,
 )
@@ -122,6 +125,72 @@ class ChatListWidget(QListWidget):
             self.signal_clear.emit()
 
 
+class ChatItemDelegate(QStyledItemDelegate):
+    ICON_TEXT_SPACING = 6
+
+    def paint(
+        self,
+        painter: QPainter | None,
+        option: QStyleOptionViewItem,
+        index,
+    ) -> None:
+        if not painter:
+            return
+        item_option = QStyleOptionViewItem(option)
+        self.initStyleOption(item_option, index)
+
+        is_right_aligned = bool(item_option.displayAlignment & Qt.AlignmentFlag.AlignRight)
+        if item_option.icon.isNull() or not is_right_aligned:
+            super().paint(painter, option, index)
+            return
+
+        widget = item_option.widget
+        style = widget.style() if widget else QApplication.style()
+
+        text_option = QStyleOptionViewItem(item_option)
+        text_option.icon = QIcon()
+        text_option.features &= ~QStyleOptionViewItem.ViewItemFeature.HasDecoration
+
+        if not style:
+            return
+        # Let Qt paint the text so foreground and selection colors stay identical to default rendering.
+        style.drawControl(QStyle.ControlElement.CE_ItemViewItem, text_option, painter, widget)
+
+        icon_size = item_option.decorationSize
+        if not icon_size.isValid() or icon_size.isEmpty():
+            extent = style.pixelMetric(QStyle.PixelMetric.PM_SmallIconSize, item_option, widget)
+            icon_size = QSize(extent, extent)
+
+        icon_mode = QIcon.Mode.Normal
+        if not item_option.state & QStyle.StateFlag.State_Enabled:
+            icon_mode = QIcon.Mode.Disabled
+        elif item_option.state & QStyle.StateFlag.State_Selected:
+            icon_mode = QIcon.Mode.Selected
+
+        icon_state = QIcon.State.On if item_option.state & QStyle.StateFlag.State_Open else QIcon.State.Off
+        icon_pixmap = item_option.icon.pixmap(icon_size, icon_mode, icon_state)
+
+        content_rect = style.subElementRect(QStyle.SubElement.SE_ItemViewItemText, text_option, widget)
+        reserved_icon_width = icon_pixmap.width() + self.ICON_TEXT_SPACING
+        text_available_rect = QRect(content_rect)
+        text_available_rect.adjust(reserved_icon_width, 0, 0, 0)
+
+        text_flags = int(
+            item_option.displayAlignment | Qt.AlignmentFlag.AlignVCenter | Qt.TextFlag.TextWordWrap
+        )
+        text_rect = item_option.fontMetrics.boundingRect(text_available_rect, text_flags, item_option.text)
+
+        painter.save()
+        icon_rect = QRect(
+            text_rect.left() - self.ICON_TEXT_SPACING - icon_pixmap.width(),
+            text_rect.center().y() - icon_pixmap.height() // 2,
+            icon_pixmap.width(),
+            icon_pixmap.height(),
+        )
+        style.drawItemPixmap(painter, icon_rect, Qt.AlignmentFlag.AlignCenter, icon_pixmap)
+        painter.restore()
+
+
 class ChatComponent(QWidget):
     # Custom signals
     itemClicked = cast(SignalProtocol[[QListWidgetItem]], pyqtSignal(QListWidgetItem))
@@ -137,6 +206,8 @@ class ChatComponent(QWidget):
         self.list_widget.signal_clear.connect(self.clearItems)
         self.list_widget.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
         self.list_widget.setWordWrap(True)
+        self.list_widget.setIconSize(QSize(12, 12))
+        self.list_widget.setItemDelegate(ChatItemDelegate(self.list_widget))
         # Enable automatic sorting.
         self.list_widget.setSortingEnabled(True)
         layout.addWidget(self.list_widget)
@@ -186,13 +257,22 @@ class ChatComponent(QWidget):
         return item
 
     def add_file(
-        self, file: FileObject, created_at: datetime, text: str | None = None, icon_path: str | None = None
+        self,
+        file: FileObject,
+        created_at: datetime,
+        text: str | None = None,
+        icon_path: str | None = None,
+        icon: QIcon | None = None,
     ) -> SortedListWidgetItem:
         """
         Adds a file entry. It displays the file's basename and adds a standard file icon.
         """
         text = text if text else os.path.basename(file.path)
-        icon = QIcon(icon_path) if icon_path else svg_tools.get_QIcon("bi--upload.svg")
+        icon = (
+            icon
+            if icon is not None
+            else (QIcon(icon_path) if icon_path else svg_tools.get_QIcon("bi--upload.svg"))
+        )
         item = self.addItem(text, created_at, icon)
         item.setData(ChatListWidget.ROLE_DATA, file)
 
