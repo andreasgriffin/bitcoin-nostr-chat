@@ -6,7 +6,7 @@ from datetime import datetime
 import bdkpython as bdk
 from bitcoin_qr_tools.data import DataType
 from nostr_sdk import EventId, Keys
-from PyQt6.QtCore import QObject, pyqtSignal
+from PyQt6.QtCore import QObject, QRect, QSize, Qt, pyqtSignal
 from PyQt6.QtGui import QIcon, QImage
 from pytestqt.qtbot import QtBot
 from bitcoin_nostr_chat.base_dm import BaseDM
@@ -14,6 +14,7 @@ from bitcoin_nostr_chat.base_dm import BaseDM
 from bitcoin_nostr_chat.chat import CONFIRMED_ICON_NAME, PENDING_ICON_NAME, Chat
 from bitcoin_nostr_chat.chat_dm import ChatDM, ChatLabel
 from bitcoin_nostr_chat.signals_min import SignalsMin
+from bitcoin_nostr_chat.ui.chat_component import ChatItemDelegate
 from bitcoin_nostr_chat.ui.util import svg_tools
 
 
@@ -229,3 +230,19 @@ def test_outgoing_file_message_uses_same_status_flow(qtbot: QtBot) -> None:
 
     assert "Published" in item.toolTip()  # type: ignore
     assert icon_bytes(item.icon()) == icon_bytes(svg_tools.get_QIcon(CONFIRMED_ICON_NAME))  # type: ignore
+
+
+def test_right_aligned_icon_rect_uses_content_rect_for_vertical_centering() -> None:
+    text_rect = QRect(120, 4, 60, 12)
+    content_rect = QRect(0, 0, 200, 24)
+    icon_rect = ChatItemDelegate.right_aligned_icon_rect(text_rect, content_rect, QSize(12, 12))
+
+    assert icon_rect.left() == 102
+    assert icon_rect.top() == 6
+
+
+def test_vertically_centered_alignment_preserves_horizontal_alignment() -> None:
+    alignment = ChatItemDelegate.vertically_centered_alignment(Qt.AlignmentFlag.AlignRight)
+
+    assert alignment & Qt.AlignmentFlag.AlignRight
+    assert alignment & Qt.AlignmentFlag.AlignVCenter

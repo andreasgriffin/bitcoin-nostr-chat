@@ -128,6 +128,19 @@ class ChatListWidget(QListWidget):
 class ChatItemDelegate(QStyledItemDelegate):
     ICON_TEXT_SPACING = 6
 
+    @classmethod
+    def vertically_centered_alignment(cls, alignment: Qt.AlignmentFlag) -> Qt.AlignmentFlag:
+        return alignment | Qt.AlignmentFlag.AlignVCenter
+
+    @classmethod
+    def right_aligned_icon_rect(cls, text_rect: QRect, content_rect: QRect, icon_size: QSize) -> QRect:
+        return QRect(
+            text_rect.left() - cls.ICON_TEXT_SPACING - icon_size.width(),
+            content_rect.top() + (content_rect.height() - icon_size.height()) // 2,
+            icon_size.width(),
+            icon_size.height(),
+        )
+
     def paint(
         self,
         painter: QPainter | None,
@@ -150,6 +163,7 @@ class ChatItemDelegate(QStyledItemDelegate):
         text_option = QStyleOptionViewItem(item_option)
         text_option.icon = QIcon()
         text_option.features &= ~QStyleOptionViewItem.ViewItemFeature.HasDecoration
+        text_option.displayAlignment = self.vertically_centered_alignment(text_option.displayAlignment)
 
         if not style:
             return
@@ -176,16 +190,15 @@ class ChatItemDelegate(QStyledItemDelegate):
         text_available_rect.adjust(reserved_icon_width, 0, 0, 0)
 
         text_flags = int(
-            item_option.displayAlignment | Qt.AlignmentFlag.AlignVCenter | Qt.TextFlag.TextWordWrap
+            self.vertically_centered_alignment(item_option.displayAlignment) | Qt.TextFlag.TextWordWrap
         )
         text_rect = item_option.fontMetrics.boundingRect(text_available_rect, text_flags, item_option.text)
 
         painter.save()
-        icon_rect = QRect(
-            text_rect.left() - self.ICON_TEXT_SPACING - icon_pixmap.width(),
-            text_rect.center().y() - icon_pixmap.height() // 2,
-            icon_pixmap.width(),
-            icon_pixmap.height(),
+        icon_rect = self.right_aligned_icon_rect(
+            text_rect=text_rect,
+            content_rect=content_rect,
+            icon_size=icon_pixmap.size(),
         )
         style.drawItemPixmap(painter, icon_rect, Qt.AlignmentFlag.AlignCenter, icon_pixmap)
         painter.restore()
