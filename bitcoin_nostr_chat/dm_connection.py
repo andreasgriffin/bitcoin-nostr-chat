@@ -121,6 +121,7 @@ class DmConnection(QObject, Generic[T_BaseDM]):
             signal_dm=signal_dm,
             from_serialized=from_serialized,
             async_dm_connection=async_dm_connection,
+            async_thread=async_thread,
             get_currently_allowed=get_currently_allowed,
             loop_in_thread=loop_in_thread,
             parent=parent,
