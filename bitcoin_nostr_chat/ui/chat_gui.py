@@ -35,7 +35,7 @@ from typing import cast
 
 from bitcoin_safe_lib.gui.qt.signal_tracker import SignalProtocol
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QBrush, QColor, QResizeEvent
+from PyQt6.QtGui import QBrush, QColor, QIcon, QResizeEvent
 from PyQt6.QtWidgets import (
     QApplication,
     QBoxLayout,
@@ -145,10 +145,18 @@ class ChatGui(QWidget):
         self.textInput.clear()
         # self.add_own(text)
 
-    def _add_message(self, text: str, alignment: Qt.AlignmentFlag, color: QColor, created_at: datetime):
-        item = self.chat_component.addItem(text, created_at=created_at)
+    def _add_message(
+        self,
+        text: str,
+        alignment: Qt.AlignmentFlag,
+        color: QColor,
+        created_at: datetime,
+        icon: QIcon | None = None,
+    ):
+        item = self.chat_component.addItem(text, created_at=created_at, icon=icon)
         item.setTextAlignment(alignment)
         item.setForeground(QBrush(color))
+        return item
 
     def _add_file(
         self,
@@ -157,10 +165,12 @@ class ChatGui(QWidget):
         alignment: Qt.AlignmentFlag,
         color: QColor,
         created_at: datetime,
+        icon: QIcon | None = None,
     ):
-        item = self.chat_component.add_file(file_object, created_at=created_at, text=text)
+        item = self.chat_component.add_file(file_object, created_at=created_at, text=text, icon=icon)
         item.setTextAlignment(alignment)
         item.setForeground(QBrush(color))
+        return item
 
     def add(
         self,
@@ -170,21 +180,24 @@ class ChatGui(QWidget):
         author_name: str,
         text: str = "",
         file_object: FileObject | None = None,
+        icon: QIcon | None = None,
     ):
         if file_object:
-            self._add_file(
+            return self._add_file(
                 text=f"{author_name}: {text}",
                 file_object=file_object,
                 alignment=Qt.AlignmentFlag.AlignRight if is_me else Qt.AlignmentFlag.AlignLeft,
                 color=color,
                 created_at=created_at,
+                icon=icon,
             )
         else:
-            self._add_message(
+            return self._add_message(
                 text=f"{author_name}: {text}",
                 alignment=Qt.AlignmentFlag.AlignRight if is_me else Qt.AlignmentFlag.AlignLeft,
                 color=color,
                 created_at=created_at,
+                icon=icon,
             )
 
 

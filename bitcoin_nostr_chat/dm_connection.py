@@ -136,25 +136,35 @@ class DmConnection(QObject, Generic[T_BaseDM]):
     async def _send_to_me(
         self,
         dm: T_BaseDM,
-    ):
-        event = await make_private_msg(
-            signer=self.async_dm_connection.notification_handler.signer,
-            receiver=self.async_dm_connection.keys.public_key(),
-            message=dm.serialize(),
-        )
-        await self.async_dm_connection.client.send_event(event=event)
-        await self.async_dm_connection.notification_handler.handle(
-            relay_url="_inject_directly_no_relay", subscription_id="_inject_directly_no_relay", event=event
-        )
+    ) -> EventId | None:
+        try:
+            event = await make_private_msg(
+                signer=self.async_dm_connection.notification_handler.signer,
+                receiver=self.async_dm_connection.keys.public_key(),
+                message=dm.serialize(),
+            )
+            await self.async_dm_connection.client.send_event(event=event)
+            await self.async_dm_connection.notification_handler.handle(
+                relay_url="_inject_directly_no_relay",
+                subscription_id="_inject_directly_no_relay",
+                event=event,
+            )
+            return event.id()
+        except Exception as e:
+            logger.error(f"Error sending direct message to self: {e}")
+            return None
 
     def send(
-        self, dm: T_BaseDM, receiver: PublicKey, on_done: Callable[[EventId | None], None] | None = None
+        self,
+        dm: T_BaseDM,
+        receiver: PublicKey,
+        on_done: Callable[[EventId | Exception | None], None] | None = None,
     ):
         self._ensure_clients_connected()
 
         if receiver.to_bech32() == self.async_dm_connection.keys.public_key().to_bech32():
             # if it is sent to me
-            self.async_thread.background(self._send_to_me(dm=dm))
+            self.async_thread.background(self._send_to_me(dm=dm), on_done=on_done)
         else:
             self.async_thread.background(self.async_dm_connection.send(dm, receiver), on_done=on_done)
 

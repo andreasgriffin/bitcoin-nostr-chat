@@ -29,13 +29,14 @@ import logging
 from abc import abstractmethod
 from collections.abc import Callable
 from datetime import datetime, timedelta
+from functools import partial
 from typing import cast
 
 import bdkpython as bdk
 from bitcoin_qr_tools.data import DataType
 from bitcoin_safe_lib.async_tools.loop_in_thread import LoopInThread
 from bitcoin_safe_lib.gui.qt.signal_tracker import SignalProtocol
-from nostr_sdk import Keys, PublicKey
+from nostr_sdk import EventId, Keys, PublicKey
 from PyQt6.QtCore import QObject, pyqtSignal
 
 from bitcoin_nostr_chat import DEFAULT_USE_COMPRESSION
@@ -276,16 +277,40 @@ class GroupChat(BaseProtocol):
             self.dm_connection.unsubscribe([remove_member])
             logger.debug(f"Removed {remove_member.to_bech32()=}")
 
-    def send_to(self, dm: ChatDM, recipients: list[PublicKey], send_also_to_me=True):
+    def send_to(
+        self,
+        dm: ChatDM,
+        recipients: list[PublicKey],
+        send_also_to_me=True,
+        on_publish_result: Callable[[str, EventId | Exception | None], None] | None = None,
+        on_self_published: Callable[[EventId | Exception | None], None] | None = None,
+    ):
         for public_key in recipients:
-            self.dm_connection.send(dm, public_key)
+            public_key_bech32 = public_key.to_bech32()
+            self.dm_connection.send(
+                dm,
+                public_key,
+                on_done=(partial(on_publish_result, public_key_bech32) if on_publish_result else None),
+            )
             logger.debug(f"Send to {public_key.to_bech32()=}")
 
         if not self.members or send_also_to_me:
-            self.dm_connection.send(dm, self.my_public_key())
+            self.dm_connection.send(dm, self.my_public_key(), on_done=on_self_published)
 
-    def send(self, dm: ChatDM, send_also_to_me=True):
-        self.send_to(dm=dm, recipients=self.members, send_also_to_me=send_also_to_me)
+    def send(
+        self,
+        dm: ChatDM,
+        send_also_to_me=True,
+        on_publish_result: Callable[[str, EventId | Exception | None], None] | None = None,
+        on_self_published: Callable[[EventId | Exception | None], None] | None = None,
+    ):
+        self.send_to(
+            dm=dm,
+            recipients=self.members,
+            send_also_to_me=send_also_to_me,
+            on_publish_result=on_publish_result,
+            on_self_published=on_self_published,
+        )
 
     def members_including_me(self):
         return self.members + [self.my_public_key()]
