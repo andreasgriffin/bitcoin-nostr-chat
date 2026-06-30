@@ -19,7 +19,7 @@ description = "A Nostr Chat with participant discovery"
 homepage = "https://github.com/andreasgriffin/bitcoin-nostr-chat"
 
 [tool.poetry.dependencies]
-python = ">=3.10,<3.13"
+python = ">=3.10,<3.15"
 cbor2 = "^5.6.3"
 requests = "^2.31.0"
 pyqt6 = "^6.6.1" 
