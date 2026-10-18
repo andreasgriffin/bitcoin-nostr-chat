@@ -57,6 +57,7 @@
       "request": "launch",
       "module": "pytest",
       "args": [
+        "-s",
         "-vvv",
         "-o", "log_cli=true",
         "-o", "log_cli_level=INFO",
@@ -70,6 +71,7 @@
       "request": "launch",
       "module": "pytest",
       "args": [
+        "-s",
         "-vvv",
         "-o", "log_cli=true",
         "-o", "log_cli_level=INFO",
